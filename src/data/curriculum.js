@@ -26,6 +26,8 @@ const moduleShortTitles = [
   "Pełne rozmowy",
 ];
 
+const extendedLessonIds = new Set([91, 95, 98, 99, 100]);
+
 const candidateLines = {
   1: [
     "Sorry, could we keep this quite brief today?",
@@ -116,7 +118,9 @@ function parseCourse() {
       const chatgpt = stripMarkdown(readField(body, "ChatGPT"));
       const phraseLine = readField(body, "Frazy");
       const phrases = [...phraseLine.matchAll(/`([^`]+)`/g)].map((item) => item[1].trim());
-      const checkpoint = title.toLowerCase().includes("checkpoint") || id === 100;
+      const checkpoint = title.toLowerCase().includes("checkpoint") || extendedLessonIds.has(id);
+      const practiceType = moduleId === 3 ? "message" : "spoken";
+      const duration = id === 91 || id === 100 ? 30 : id === 99 ? 20 : checkpoint ? 18 : 16;
 
       parsedLessons.push({
         id,
@@ -130,7 +134,8 @@ function parseCourse() {
         chatgpt,
         phrases,
         checkpoint,
-        duration: checkpoint ? 18 : 16,
+        practiceType,
+        duration,
         candidateLine: candidateLines[moduleId][(id - 1) % candidateLines[moduleId].length],
       });
       moduleLessonIds.push(id);
@@ -144,14 +149,6 @@ function parseCourse() {
       color: moduleColors[moduleIndex],
       lessonIds: moduleLessonIds,
     });
-  });
-
-  parsedLessons.forEach((lesson, index) => {
-    if (lesson.phrases.length) return;
-    lesson.phrases = parsedLessons
-      .slice(Math.max(0, index - 4), index)
-      .flatMap((item) => item.phrases.slice(0, 2))
-      .slice(-6);
   });
 
   return { modules: parsedModules, lessons: parsedLessons };
@@ -168,16 +165,19 @@ export function getModule(id) {
 }
 
 export function lessonPrompt(lesson, mode, userInput, hardPhrases = [], myPhrases = []) {
+  const isMessagePractice = lesson.practiceType === "message";
   const modeInstructions = {
     explain: "Explain the differences between the phrases, when to use them, and any natural alternatives.",
-    check: "Correct my answer. Keep my meaning, make it natural for a spoken recruiter conversation, and explain only the most important change in Polish.",
+    check: `Correct my answer. Keep my meaning, make it natural for a ${isMessagePractice ? "short recruiter message" : "spoken recruiter conversation"}, and explain only the most important change in Polish.`,
     practice: "Give me short Polish-to-English prompts and transformations. Wait for each answer before continuing.",
-    roleplay: "Act as the candidate. Run a realistic role-play one turn at a time and do not give me the recruiter answer in advance.",
+    roleplay: isMessagePractice
+      ? "Act as the candidate. Run a realistic exchange of short messages one turn at a time and do not give me the recruiter answer in advance."
+      : "Act as the candidate. Run a realistic spoken role-play one turn at a time and do not give me the recruiter answer in advance.",
   };
 
   return `You are my English speaking coach. I work as an IT recruiter in a nearshore team and use English in almost every candidate conversation. My level is around B2. I understand English well, but I sometimes freeze when I have to speak unexpectedly. My goal is to automate natural, professional spoken English rather than learn formal grammar or corporate-sounding phrases.
 
-Current lesson: ${lesson.id} — ${lesson.title}
+Current lesson: ${lesson.id}: ${lesson.title}
 Situation: ${lesson.scenario}
 Lesson goal: ${lesson.goal}
 Target phrases:
@@ -193,5 +193,5 @@ Selected practice mode: ${modeInstructions[mode] || modeInstructions.roleplay}
 My question or answer, if provided:
 ${userInput?.trim() || "No additional question."}
 
-Use natural spoken English suitable for a capable B2 recruiter. Prefer sentences that are easy to say under pressure. Avoid LinkedIn-style corporate language and unnecessary jargon. Ask one question at a time during role-play. Do not interrupt minor mistakes. After every three answers, give one important correction in Polish, one natural corrected version in English, and one reusable phrase. Never ask for or repeat real candidate data, confidential client names, or internal project details. Start now.`;
+Use natural ${isMessagePractice ? "written" : "spoken"} English suitable for a capable B2 recruiter. Prefer sentences that are easy to ${isMessagePractice ? "write quickly" : "say under pressure"}. Avoid LinkedIn-style corporate language and unnecessary jargon. Ask one question at a time during role-play. Do not interrupt minor mistakes. After every three answers, give one important correction in Polish, one natural corrected version in English, and one reusable phrase. Never ask for or repeat real candidate data, confidential client names, or internal project details. Start now.`;
 }

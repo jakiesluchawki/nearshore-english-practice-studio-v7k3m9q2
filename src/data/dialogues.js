@@ -44,9 +44,9 @@ export const lessonDialogues = {
     ["You", "Thanks. Let me move on to the next point."],
   ],
   10: [
-    ["Candidate", "Could you repeat the question? The line cut out for a moment."],
-    ["You", "Of course. Let me rephrase it."],
-    ["Candidate", "Perfect, I can hear you clearly now."],
+    ["Candidate", "We moved the service to Kubernetes last quarter, and the deployment setup changed at the same time."],
+    ["You", "I didn’t quite catch the last part. Could you say that again, please?"],
+    ["Candidate", "Of course. I said the deployment setup changed as well."],
   ],
   11: [
     ["You", "Hi, this is Marta calling from emagine. I work with international IT recruitment projects."],
@@ -86,12 +86,12 @@ export const lessonDialogues = {
   ],
   19: [
     ["You", "What rate range would you be looking for?"],
-    ["Candidate", "I’d be looking for something around 160 złotych per hour."],
+    ["Candidate", "I’d be looking for something around 160 PLN per hour."],
     ["You", "And do you have a preferred contract type?"],
   ],
   20: [
     ["You", "Before we wrap up, I’d like to confirm your notice period and rate expectations."],
-    ["Candidate", "Sure. My notice period is one month and my target rate is 150 złotych per hour."],
+    ["Candidate", "Sure. My notice period is one month and my target rate is 150 PLN per hour."],
   ],
   21: [
     ["You", "I came across your profile while looking for a senior Java developer."],
@@ -228,7 +228,7 @@ export const lessonDialogues = {
     ["You", "Is there any flexibility around your start date?"],
   ],
   52: [
-    ["You", "What type of contract are you currently working under?"],
+    ["You", "What type of contract are you on at the moment?"],
     ["Candidate", "I’m currently on a B2B contract."],
     ["You", "Would you like to continue with that arrangement?"],
   ],
@@ -238,16 +238,16 @@ export const lessonDialogues = {
   ],
   54: [
     ["You", "What hourly rate would you be looking for?"],
-    ["Candidate", "My target would be around 170 złotych per hour."],
+    ["Candidate", "My target would be around 170 PLN per hour."],
   ],
   55: [
     ["You", "To make sure we’re aligned, what rate range would you be comfortable with?"],
-    ["Candidate", "I’d be comfortable between 160 and 175 złotych per hour."],
+    ["Candidate", "I’d be comfortable between 160 and 175 PLN per hour."],
   ],
   56: [
     ["You", "The current budget is slightly below that range."],
     ["Candidate", "How far below are we talking?"],
-    ["You", "The top of the range is 155 złotych per hour."],
+    ["You", "The top of the range is 155 PLN per hour."],
   ],
   57: [
     ["You", "How flexible are you on the rate?"],
@@ -301,7 +301,7 @@ export const lessonDialogues = {
     ["You", "Which part would you like to prepare for?"],
   ],
   69: [
-    ["You", "Just a quick reminder about tomorrow’s interview. Good luck, I hope it goes well."],
+    ["You", "Just a quick reminder about tomorrow’s interview. Good luck. I hope it goes well."],
     ["Candidate", "Thank you. I’m looking forward to it."],
   ],
   70: [
@@ -356,7 +356,7 @@ export const lessonDialogues = {
     ["Candidate", "That’s great news. I’m excited to hear the details."],
   ],
   82: [
-    ["You", "The proposed rate is 165 złotych per hour, and the expected start date would be 1 October."],
+    ["You", "The proposed rate is 165 PLN per hour, and the expected start date would be 1 October."],
     ["Candidate", "Thanks. Could you also confirm the notice terms?"],
   ],
   83: [
@@ -364,12 +364,12 @@ export const lessonDialogues = {
     ["Candidate", "The role is attractive, but the rate is a little below what I had in mind."],
   ],
   84: [
-    ["Candidate", "I was expecting a rate closer to 180 złotych per hour."],
+    ["Candidate", "I was expecting a rate closer to 180 PLN per hour."],
     ["You", "I understand your concern. Let me see what flexibility there may be."],
     ["Candidate", "Thank you. I’d appreciate that."],
   ],
   85: [
-    ["You", "The client would like to offer you the role at 165 złotych per hour. What are your first thoughts?"],
+    ["You", "The client would like to offer you the role at 165 PLN per hour. What are your first thoughts?"],
     ["Candidate", "I’m very interested, although I’d like to discuss the rate."],
   ],
   86: [
@@ -440,7 +440,7 @@ export const lessonDialogues = {
     ["Candidate", "Sounds good. I’m ready."],
   ],
   100: [
-    ["You", "Before we wrap up, let me summarise: you’re interested in the role, your notice period is two months and your target rate is 170 złotych per hour."],
+    ["You", "Before we wrap up, let me summarise: you’re interested in the role, your notice period is two months and your target rate is 170 PLN per hour."],
     ["Candidate", "That’s correct. What will the next step be?"],
     ["You", "I’ll share your profile with the client and come back to you as soon as I have an update."],
   ],
@@ -451,25 +451,4 @@ export function getLessonDialogue(lesson) {
     ["You", lesson.phrases[0]],
     ["Candidate", "Thanks, that’s clear."],
   ];
-}
-
-export function getLessonQuizAnswer(lesson) {
-  const recruiterText = getLessonDialogue(lesson)
-    .filter(([speaker]) => speaker === "You")
-    .map(([, text]) => text.toLowerCase())
-    .join(" ");
-
-  const matchingPhrases = lesson.phrases
-    .map((phrase) => {
-      const searchablePart = phrase
-        .split("…")[0]
-        .replace(/[.!?]+$/, "")
-        .trim()
-        .toLowerCase();
-      return { phrase, searchablePart };
-    })
-    .filter(({ searchablePart }) => searchablePart.length >= 8 && recruiterText.includes(searchablePart))
-    .sort((a, b) => b.searchablePart.length - a.searchablePart.length);
-
-  return matchingPhrases[0]?.phrase || lesson.phrases[0];
 }

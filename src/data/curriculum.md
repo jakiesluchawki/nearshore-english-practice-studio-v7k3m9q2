@@ -65,6 +65,7 @@ Cel modułu: utrzymać kontrolę nad rozmową nawet wtedy, gdy pojawia się stre
 
 - **Rezultat:** połączyć przywitanie, kupowanie czasu, powtórzenie i przeformułowanie.
 - **Scenka:** krótki telefon z szybką wypowiedzią kandydata i jednym nieoczekiwanym pytaniem.
+- **Frazy:** `That’s a good question.` · `Let me think for a second.` · `Could you say that again, please?` · `I didn’t quite catch the last part.` · `Let me rephrase that.` · `What I mean is…`
 - **ChatGPT:** pięciominutowa symulacja z trzema kontrolowanymi momentami „brain empty”.
 
 ### 6. Setting an agenda
@@ -95,6 +96,7 @@ Cel modułu: utrzymać kontrolę nad rozmową nawet wtedy, gdy pojawia się stre
 
 - **Rezultat:** utrzymać pięciominutową rozmowę mimo przerw, niejasności i braku informacji.
 - **Scenka:** kandydat mówi szybko, zadaje pytanie o nieznany szczegół i zmienia temat.
+- **Frazy:** `I didn’t quite catch the last part.` · `Could you say that again, please?` · `I don’t have that information yet, but I’ll check.` · `Let me confirm that with the client.` · `Going back to what you mentioned earlier…` · `Let me move on to the next point.`
 - **ChatGPT:** powtórzenie scenki z rosnącym poziomem trudności.
 
 ---
@@ -131,6 +133,7 @@ Cel modułu: zbudować prosty, bezpieczny skrypt rozmowy od przedstawienia się 
 
 - **Rezultat:** płynnie przeprowadzić otwarcie, cel telefonu, agendę i sprawdzenie zainteresowania.
 - **Scenka:** trzy warianty reakcji kandydata: zainteresowany, niepewny i zabiegany.
+- **Frazy:** `Thanks for taking the time to speak with me today.` · `I’m calling regarding an opportunity that may be relevant to you.` · `Is now still a good time?` · `The call should take around twenty minutes.` · `I’ll start with the role, and then I’d love to hear about your experience.` · `Would you be open to hearing about a new opportunity?`
 - **ChatGPT:** wielokrotne otwieranie rozmowy bez korzystania ze skryptu.
 
 ### 16. Current role and responsibilities
@@ -161,6 +164,7 @@ Cel modułu: zbudować prosty, bezpieczny skrypt rozmowy od przedstawienia się 
 
 - **Rezultat:** przeprowadzić prosty screening call od przywitania do kolejnych kroków.
 - **Scenka:** 15–20-minutowa symulacja wykorzystująca materiał z lekcji 1–19.
+- **Frazy:** `Could you walk me through your current role?` · `Which technologies do you work with most often?` · `What is your current notice period?` · `What rate range would you be looking for?` · `Are you currently involved in any other recruitment processes?` · `Let me quickly walk you through the next steps.`
 - **ChatGPT:** pełna rozmowa z feedbackiem dopiero po jej zakończeniu.
 
 ---
@@ -197,6 +201,7 @@ Cel modułu: pisać krótkie, naturalne wiadomości i zamieniać zainteresowanie
 
 - **Rezultat:** przejść od pierwszej wiadomości przez follow-up do umówionego telefonu.
 - **Scenka:** kandydat odpowiada dopiero po drugim kontakcie i prosi o najważniejsze szczegóły.
+- **Frazy:** `I came across your profile while looking for…` · `I just wanted to follow up on my previous message.` · `Based on your experience with…` · `I’ll send you the key details first.` · `Would you be available for a short introductory call?` · `Feel free to suggest another time.`
 - **ChatGPT:** poprawa całej sekwencji pod kątem naturalności i zwięzłości.
 
 ### 26. Responding to an interested candidate
@@ -214,7 +219,7 @@ Cel modułu: pisać krótkie, naturalne wiadomości i zamieniać zainteresowanie
 ### 28. “Send me the details first”
 
 - **Rezultat:** odpowiedzieć konkretnie i zachęcić do późniejszej rozmowy.
-- **Frazy:** `Of course — I’ll send you the key details.` · `The main points are…` · `If it looks relevant, we can arrange a short call.`
+- **Frazy:** `Of course. I’ll send you the key details.` · `The main points are…` · `If it looks relevant, we can arrange a short call.`
 - **ChatGPT:** tworzenie zwięzłego podsumowania roli w wiadomości.
 
 ### 29. Reconnecting and keeping warm
@@ -227,6 +232,7 @@ Cel modułu: pisać krótkie, naturalne wiadomości i zamieniać zainteresowanie
 
 - **Rezultat:** obsłużyć pełną sekwencję dla pasywnego kandydata.
 - **Scenka:** kandydat odpowiada krótko, prosi o szczegóły i ma ograniczoną dostępność.
+- **Frazy:** `I completely understand.` · `Of course. I’ll send you the key details.` · `If it looks relevant, we can arrange a short call.` · `Would you be open to reconnecting?` · `Feel free to suggest another time.` · `Thanks for getting back to me.`
 - **ChatGPT:** symulacja wiadomości jedna po drugiej bez gotowych odpowiedzi.
 
 ---
@@ -263,6 +269,7 @@ Cel modułu: zebrać wiarygodny obraz profilu technicznego i nauczyć się natur
 
 - **Rezultat:** w pięć minut zebrać rolę, projekt, obowiązki i najważniejsze technologie.
 - **Scenka:** kandydat używa wielu nazw narzędzi, ale odpowiada krótko o własnym udziale.
+- **Frazy:** `Could you give me a brief overview of your career so far?` · `What are you personally responsible for?` · `What kind of product are you working on?` · `How is the team structured?` · `What does your core tech stack look like?` · `Which tools do you use on a daily basis?`
 - **ChatGPT:** ćwiczenie pytań pogłębiających bez technicznego żargonu ponad poziom recruiterki.
 
 ### 36. Hands-on experience versus exposure
@@ -293,6 +300,7 @@ Cel modułu: zebrać wiarygodny obraz profilu technicznego i nauczyć się natur
 
 - **Rezultat:** przeprowadzić spójną 10-minutową część dotyczącą doświadczenia.
 - **Scenka:** profil senior developera z niejasnym zakresem odpowiedzialności.
+- **Frazy:** `Could you give me a brief overview of your career so far?` · `Could you give me a recent example?` · `What was your personal contribution?` · `What level of ownership do you have?` · `What is prompting you to consider a change?` · `That gives me a good picture of your experience.`
 - **ChatGPT:** pełna sekcja z końcowym podsumowaniem mocnych stron i znaków zapytania.
 
 ---
@@ -329,6 +337,7 @@ Cel modułu: opowiadać o możliwości konkretnie, krótko i naturalnie oraz spr
 
 - **Rezultat:** przedstawić klienta, projekt, zakres i główną wartość roli w dwie minuty.
 - **Scenka:** kandydat przerywa dwoma pytaniami w trakcie prezentacji.
+- **Frazy:** `Let me give you a quick overview of the role.` · `The end client is a company in the… sector.` · `The project involves…` · `You’d be responsible for…` · `The team currently consists of…` · `How does that sound so far?`
 - **ChatGPT:** trening z limitem czasu i feedbackiem dotyczącym zwięzłości.
 
 ### 46. Team and technology setup
@@ -359,6 +368,7 @@ Cel modułu: opowiadać o możliwości konkretnie, krótko i naturalnie oraz spr
 
 - **Rezultat:** przedstawić rolę i odpowiedzieć na podstawowe zastrzeżenia.
 - **Scenka:** kandydat pyta o klienta, zdalność, stabilność projektu i zakres odpowiedzialności.
+- **Frazy:** `Let me give you a quick overview of the role.` · `I can’t share the company name at this stage.` · `The project involves…` · `You’d be responsible for…` · `The role is fully remote.` · `What questions come to mind at this stage?`
 - **ChatGPT:** pełna prezentacja z naturalnymi przerwami na pytania.
 
 ---
@@ -376,13 +386,13 @@ Cel modułu: prowadzić logistyczną i finansową część rozmowy jasno, neutra
 ### 52. Preferred contract type
 
 - **Rezultat:** zapytać o formę współpracy i otwartość na alternatywy.
-- **Frazy:** `What type of contract are you currently working under?` · `Do you have a preferred contract type?` · `Would you consider a B2B contract?`
+- **Frazy:** `What type of contract are you on at the moment?` · `Do you have a preferred contract type?` · `Would you consider a B2B contract?`
 - **ChatGPT:** neutralne porównanie preferencji bez udzielania porad prawnych.
 
 ### 53. Salary expectations
 
 - **Rezultat:** uzyskać jasny przedział oczekiwań dla umowy o pracę.
-- **Frazy:** `What salary range would you be looking for?` · `Would that be your gross monthly expectation?` · `Is there any flexibility within that range?`
+- **Frazy:** `What salary range would you be looking for?` · `Is that gross per month?` · `Is there any flexibility within that range?`
 - **ChatGPT:** rozmowa z kandydatem, który nie chce podać liczby pierwszy.
 
 ### 54. Rate expectations
@@ -395,6 +405,7 @@ Cel modułu: prowadzić logistyczną i finansową część rozmowy jasno, neutra
 
 - **Rezultat:** przejść przez oczekiwania finansowe bez przepraszania i zbędnych wstępów.
 - **Scenka:** kandydat odpowiada pytaniem o budżet i prosi o najwyższą możliwą stawkę.
+- **Frazy:** `What type of contract are you on at the moment?` · `Do you have a preferred contract type?` · `What salary range would you be looking for?` · `Is that gross per month?` · `What hourly rate would you be looking for?` · `Would that be on a B2B basis?`
 - **ChatGPT:** trzy warianty rozmowy finansowej z różnym poziomem bezpośredniości.
 
 ### 56. A budget mismatch
@@ -412,7 +423,7 @@ Cel modułu: prowadzić logistyczną i finansową część rozmowy jasno, neutra
 ### 58. Other recruitment processes
 
 - **Rezultat:** ustalić etap innych procesów i potencjalne terminy decyzji.
-- **Frazy:** `Are you currently involved in any other recruitment processes?` · `How advanced are those conversations?` · `Do you have any upcoming decision deadlines?`
+- **Frazy:** `Are you currently involved in any other recruitment processes?` · `What stage are you at in those processes?` · `Do you have any upcoming decision deadlines?`
 - **ChatGPT:** pytania, które brzmią informacyjnie, a nie kontrolująco.
 
 ### 59. Location, English, time zones and travel
@@ -425,6 +436,7 @@ Cel modułu: prowadzić logistyczną i finansową część rozmowy jasno, neutra
 
 - **Rezultat:** zebrać dostępność, kontrakt, stawkę, lokalizację i inne procesy w spójnym bloku.
 - **Scenka:** kandydat ma wysokie oczekiwania, trzymiesięczny notice period i zaawansowany drugi proces.
+- **Frazy:** `What is your current notice period?` · `Do you have a preferred contract type?` · `What rate range would you be looking for?` · `Are you currently involved in any other recruitment processes?` · `Where are you currently based?` · `Let me summarise the practical details.`
 - **ChatGPT:** pełna symulacja z podsumowaniem ryzyk po rozmowie.
 
 ---
@@ -461,6 +473,7 @@ Cel modułu: sprawnie organizować proces i dawać kandydatowi poczucie, że wie
 
 - **Rezultat:** ustalić nowy termin pomimo kilku ograniczeń i zmian.
 - **Scenka:** klient odwołuje spotkanie tego samego dnia, a kandydat ma mało wolnych terminów.
+- **Frazy:** `The client needs to reschedule the interview.` · `I’m sorry for the inconvenience.` · `What days and times would work best for you?` · `Would another time work for you?` · `Just to confirm, the interview is scheduled for…` · `I’ll send you an updated calendar invitation.`
 - **ChatGPT:** realistyczna rozmowa bez automatycznych podpowiedzi.
 
 ### 66. Starting interview preparation
@@ -484,13 +497,14 @@ Cel modułu: sprawnie organizować proces i dawać kandydatowi poczucie, że wie
 ### 69. Before and after the interview
 
 - **Rezultat:** wysłać naturalne przypomnienie i zebrać świeże wrażenia.
-- **Frazy:** `Just a quick reminder about tomorrow’s interview.` · `Good luck — I hope it goes well.` · `How did the conversation go from your perspective?`
+- **Frazy:** `Just a quick reminder about tomorrow’s interview.` · `Good luck. I hope it goes well.` · `How did the conversation go from your perspective?`
 - **ChatGPT:** krótkie wiadomości przed spotkaniem i telefon po spotkaniu.
 
 ### 70. Checkpoint: Complete interview-prep call
 
 - **Rezultat:** przeprowadzić przygotowanie od agendy do ostatnich pytań.
 - **Scenka:** kandydat obawia się części technicznej i nie zna dobrze klienta.
+- **Frazy:** `I’d like to help you prepare for the interview.` · `They will most likely focus on…` · `It would be useful to think of a few examples.` · `The interview should take around an hour.` · `You’ll be speaking with…` · `Is there anything you’d like to clarify beforehand?`
 - **ChatGPT:** pełna rozmowa przygotowawcza z końcowym podsumowaniem.
 
 ---
@@ -508,7 +522,7 @@ Cel modułu: prowadzić trudniejsze komunikaty spokojnie, uczciwie i po ludzku.
 ### 72. Asking the candidate for an update
 
 - **Rezultat:** poznać odczucia, poziom zainteresowania i zmiany sytuacji.
-- **Frazy:** `How did the interview go from your perspective?` · `What is your current level of interest?` · `Has anything changed on your side?`
+- **Frazy:** `How did the interview go from your perspective?` · `How interested are you in the role at this point?` · `Has anything changed on your side?`
 - **ChatGPT:** rozmowa z kandydatem odpowiadającym niejednoznacznie.
 
 ### 73. Explaining a client delay
@@ -527,6 +541,7 @@ Cel modułu: prowadzić trudniejsze komunikaty spokojnie, uczciwie i po ludzku.
 
 - **Rezultat:** obsłużyć frustrację kandydata i nie obiecać terminu, którego nie kontroluje.
 - **Scenka:** kandydat ma inną ofertę i potrzebuje decyzji w ciągu dwóch dni.
+- **Frazy:** `I understand the time pressure.` · `I don’t have a final update yet, but I wanted to keep you informed.` · `I’ll contact the client today and come back to you as soon as I can.` · `We’re still waiting for the client’s final feedback.` · `Do you have a decision deadline?` · `I’ll keep you posted as soon as I hear back.`
 - **ChatGPT:** rozmowa z presją czasu i ograniczoną wiedzą recruiterki.
 
 ### 76. Positive feedback and next stage
@@ -544,19 +559,20 @@ Cel modułu: prowadzić trudniejsze komunikaty spokojnie, uczciwie i po ludzku.
 ### 78. A professional rejection
 
 - **Rezultat:** przekazać odmowę normalnie, jasno i z szacunkiem.
-- **Frazy:** `Unfortunately, the client has decided not to move forward.` · `They chose a candidate whose experience was closer to…` · `This doesn’t take away from the strengths in your profile.`
+- **Frazy:** `Unfortunately, the client has decided not to move forward.` · `They chose a candidate whose experience was closer to…` · `I’d still be happy to keep in touch about future roles.`
 - **ChatGPT:** odrzucenie po screeningu i po końcowym interview.
 
 ### 79. Limited or missing feedback
 
 - **Rezultat:** uczciwie powiedzieć, że szczegółowego feedbacku nie ma.
-- **Frazy:** `I haven’t received detailed feedback yet.` · `I understand that this may be disappointing.` · `With your permission, I’d be happy to contact you about future roles.`
+- **Frazy:** `I haven’t received detailed feedback yet.` · `I understand that this may be disappointing.` · `Would it be okay if I contacted you about future roles?`
 - **ChatGPT:** rozmowa z kandydatem domagającym się dokładnego uzasadnienia.
 
 ### 80. Checkpoint: Outcome conversations
 
 - **Rezultat:** przeprowadzić pozytywny feedback, opóźnienie i rejection w trzech krótkich scenkach.
 - **Scenka:** każda rozmowa wymaga innego tonu i innego zakończenia.
+- **Frazy:** `The client was very positive about your interview.` · `They’d like to move forward with your application.` · `We’re still waiting for the client’s final feedback.` · `Unfortunately, the client has decided not to move forward.` · `I haven’t received detailed feedback yet.` · `I’d still be happy to keep in touch about future roles.`
 - **ChatGPT:** losowanie wyniku procesu bez wcześniejszego ujawnienia wariantu.
 
 ---
@@ -593,6 +609,7 @@ Cel modułu: prowadzić końcowy etap bez przesadnej presji, jednocześnie jasno
 
 - **Rezultat:** przedstawić ofertę, zrobić przestrzeń na reakcję i zebrać pytania.
 - **Scenka:** kandydat jest zainteresowany, ale oczekiwał wyższej stawki.
+- **Frazy:** `I have some good news to share.` · `The client would like to make you an offer.` · `I’d like to walk you through the details.` · `The proposed rate is…` · `What are your first thoughts?` · `Let me see what flexibility there may be.`
 - **ChatGPT:** pełna rozmowa ofertowa z krótkim podsumowaniem ustaleń.
 
 ### 86. Handling a counteroffer
@@ -623,6 +640,7 @@ Cel modułu: prowadzić końcowy etap bez przesadnej presji, jednocześnie jasno
 
 - **Rezultat:** przeprowadzić końcowy etap od przedstawienia oferty do decyzji.
 - **Scenka:** kandydat ma konkurencyjną ofertę i otrzymuje counteroffer.
+- **Frazy:** `I understand.` · `Apart from compensation, what matters most in your decision?` · `What makes the counteroffer attractive to you?` · `Let me see what flexibility there may be.` · `Thank you for being open with me.` · `Would you mind sharing what influenced your decision?`
 - **ChatGPT:** pełna negocjacja z oceną klarowności, tonu i niepotrzebnej presji.
 
 ---
@@ -635,6 +653,7 @@ Cel modułu: połączyć cały materiał w elastyczne rozmowy, które nie brzmi�
 
 - **Rezultat:** przeprowadzić 25–30-minutowy screening z rozmownym, zainteresowanym kandydatem.
 - **Zakres:** otwarcie, projekt, doświadczenie, motywacja, logistyka i kolejne kroki.
+- **Frazy:** `Thanks for taking the time to speak with me today.` · `I’ll briefly introduce the role, then I’d love to hear about your experience.` · `Could you walk me through your current role?` · `What is prompting you to consider a change?` · `What is your current notice period?` · `Let me quickly walk you through the next steps.`
 - **ChatGPT:** pełna symulacja bez korekty do momentu zakończenia rozmowy.
 
 ### 92. Full screening: Quiet candidate
@@ -659,6 +678,7 @@ Cel modułu: połączyć cały materiał w elastyczne rozmowy, które nie brzmi�
 
 - **Rezultat:** zebrać wystarczające dane z niejasnego CV i niespójnych odpowiedzi.
 - **Scenka:** szeroki tech stack, częste zmiany pracy i trudna do uchwycenia rola w zespole.
+- **Frazy:** `Could you tell me a little more about that?` · `Let’s focus on your most recent project.` · `When you say X, what does that mean in practice?` · `What specifically were you responsible for?` · `How much of that work was hands-on?` · `That gives me a good picture of your experience.`
 - **ChatGPT:** ocena jakości pytań, a nie ocena techniczna kandydata.
 
 ### 96. Accent and connection problems
@@ -677,18 +697,21 @@ Cel modułu: połączyć cały materiał w elastyczne rozmowy, które nie brzmi�
 
 - **Rezultat:** reagować, gdy podczas jednej rozmowy pojawia się kilka trudności.
 - **Scenka:** kandydat ma mało czasu, niejasne oczekiwania, drugi proces i pyta o nieznane szczegóły klienta.
+- **Frazy:** `Thanks for being clear.` · `I’ll focus on the key points.` · `I don’t have that information yet, but I’ll check.` · `Could you tell me a little more about that?` · `Are you currently involved in any other recruitment processes?` · `Let’s move on to the practical details.`
 - **ChatGPT:** losowa kombinacja czterech problemów z materiału całego kursu.
 
 ### 99. My personal screening script
 
 - **Rezultat:** zbudować własny skrypt z ulubionych i najlepiej zapamiętanych fraz.
 - **Zadanie:** wybrać po 1–2 frazy do każdego etapu rozmowy i przećwiczyć płynne przejścia.
+- **Frazy:** `Thanks for taking the time to speak with me today.` · `I’ll start with a quick overview of the role.` · `Could you walk me through your current role?` · `What rate range would you be looking for?` · `That gives me a good picture of your experience.` · `Before we wrap up, I’d like to confirm the next steps.`
 - **ChatGPT:** prompt zawierający wyłącznie `My Phrases` oraz obszary nadal oceniane jako `Hard`.
 
 ### 100. Final challenge: The 30-minute call
 
 - **Rezultat:** przeprowadzić pełny screening call bez podpowiedzi, zareagować na niespodziewane pytanie i jasno zakończyć rozmowę.
 - **Scenka:** realistyczny kandydat IT z własnymi priorytetami, pytaniami i równoległym procesem.
+- **Frazy:** `Thanks for taking the time to speak with me today.` · `Let me give you a quick overview of the role.` · `Could you walk me through your current role?` · `What is your current notice period?` · `Before we wrap up, let me summarise.` · `I’ll share your profile with the client and come back to you as soon as I have an update.`
 - **ChatGPT:** odblokowany prompt `Advanced Practice`, który generuje dalsze scenariusze na podstawie ukończonego kursu, `My Phrases` i trudnych obszarów.
 
 ---

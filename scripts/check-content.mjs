@@ -13,8 +13,8 @@ if (JSON.stringify(numbers) !== JSON.stringify(expected)) {
 }
 
 const phrases = [...text.matchAll(/- \*\*Frazy:\*\* ([^\n]+)/g)];
-if (phrases.length < 70) {
-  console.error(`Expected phrase packs for standard lessons, found ${phrases.length}.`);
+if (phrases.length !== 100) {
+  console.error(`Expected one authored phrase pack for every lesson, found ${phrases.length}.`);
   process.exit(1);
 }
 
@@ -34,19 +34,66 @@ for (const [lessonId, lines] of Object.entries(lessonDialogues)) {
 }
 
 const vite = await createServer({ configFile: false, server: { middlewareMode: true }, appType: "custom", logLevel: "silent" });
-const { lessons } = await vite.ssrLoadModule("/src/data/curriculum.js");
-const { getLessonQuiz } = await vite.ssrLoadModule("/src/data/quizzes.js");
+const { lessons, lessonPrompt } = await vite.ssrLoadModule("/src/data/curriculum.js");
+const { getLessonQuiz, quizBlueprints } = await vite.ssrLoadModule("/src/data/quizzes.js");
+const { getLessonPractice } = await vite.ssrLoadModule("/src/data/practice.js");
+const { getDueReviewLessonId, scheduleReview } = await vite.ssrLoadModule("/src/data/reviews.js");
+
+if (lessons.length !== 100 || quizBlueprints.length !== 101) {
+  console.error(`Expected 100 runtime lessons and 100 authored quiz blueprints.`);
+  await vite.close();
+  process.exit(1);
+}
 
 for (const lesson of lessons) {
-  const { answer, options } = getLessonQuiz(lesson);
-  const validQuiz = lesson.phrases.includes(answer) && options.length === 3 && new Set(options).size === 3 && options.filter((option) => option === answer).length === 1;
+  const minimumPhrases = lesson.checkpoint ? 6 : 3;
+  if (lesson.phrases.length < minimumPhrases) {
+    console.error(`Lesson ${lesson.id} requires at least ${minimumPhrases} authored phrases, found ${lesson.phrases.length}.`);
+    await vite.close();
+    process.exit(1);
+  }
+
+  const { answer, intention, options } = getLessonQuiz(lesson);
+  const validQuiz = lesson.phrases.includes(answer) && intention?.trim() && options.length === 3 && new Set(options).size === 3 && options.filter((option) => option === answer).length === 1;
   if (!validQuiz) {
-    console.error(`Quiz ${lesson.id} must contain one lesson answer and two unique distractors.`);
+    console.error(`Quiz ${lesson.id} must contain an authored intention, one lesson answer and two unique distractors.`);
+    await vite.close();
+    process.exit(1);
+  }
+
+  const practice = getLessonPractice(lesson);
+  const expectedPracticeType = lesson.moduleId === 3 ? "message" : "spoken";
+  if (lesson.practiceType !== expectedPracticeType || !practice.introTitle || !practice.finalTitle || !practice.finalBody) {
+    console.error(`Lesson ${lesson.id} has an invalid ${lesson.practiceType} practice blueprint.`);
     await vite.close();
     process.exit(1);
   }
 }
 
+if (JSON.stringify([scheduleReview("again", new Date(2026, 0, 10, 12)), scheduleReview("hard", new Date(2026, 0, 10, 12)), scheduleReview("good", new Date(2026, 0, 10, 12))]) !== JSON.stringify(["2026-01-11", "2026-01-13", "2026-01-17"])) {
+  console.error("Review intervals must schedule Again, Hard and Good after 1, 3 and 7 days.");
+  await vite.close();
+  process.exit(1);
+}
+
+if (getDueReviewLessonId({ reviewSchedule: { 4: "2026-01-10", 2: "2026-01-09" } }, "2026-01-10") !== 2) {
+  console.error("Due reviews must prioritize the oldest scheduled lesson.");
+  await vite.close();
+  process.exit(1);
+}
+
+if (!lessonPrompt(lessons[20], "roleplay", "").includes("exchange of short messages") || !lessonPrompt(lessons[0], "roleplay", "").includes("spoken role-play")) {
+  console.error("ChatGPT prompts must distinguish written-message practice from spoken role-play.");
+  await vite.close();
+  process.exit(1);
+}
+
+if (Object.values(lessonDialogues).flat(2).some((value) => typeof value === "string" && value.includes("złotych per hour"))) {
+  console.error("English dialogues must use PLN, not mixed Polish-English currency wording.");
+  await vite.close();
+  process.exit(1);
+}
+
 await vite.close();
 
-console.log(`Content check passed: ${numbers.length} lessons, ${phrases.length} authored phrase packs, ${dialogueIds.length} mini-dialogues and ${lessons.length} quizzes.`);
+console.log(`Content check passed: ${numbers.length} lessons, ${phrases.length} authored phrase packs, ${dialogueIds.length} mini-dialogues, ${lessons.length} authored quizzes and review scheduling.`);

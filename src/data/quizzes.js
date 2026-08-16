@@ -1,5 +1,111 @@
 import { getLesson } from "./curriculum.js";
-import { getLessonQuizAnswer } from "./dialogues.js";
+
+// The quiz answer is authored for the lesson intention. It must never be guessed
+// from phrase length or dialogue position: both produced plausible-looking but
+// semantically wrong answers in checkpoints and capstones.
+export const quizBlueprints = [
+  null,
+  ["Is now still a good time for you?", "sprawdzić, czy kandydat nadal może rozmawiać"],
+  ["Let me think for a second.", "kupić sobie kilka sekund na zebranie myśli"],
+  ["Could you say that again, please?", "poprosić o powtórzenie bez przepraszania za angielski"],
+  ["Let me rephrase that.", "spokojnie poprawić własne pytanie"],
+  ["That’s a good question.", "odzyskać płynność, gdy odpowiedź nie przychodzi od razu"],
+  ["Let me quickly walk you through the plan for today’s call.", "krótko ustawić agendę rozmowy"],
+  ["Just to make sure I understood you correctly…", "sprawdzić, czy dobrze rozumiesz kandydata"],
+  ["I don’t have that information yet, but I’ll check.", "uczciwie powiedzieć, że czegoś nie wiesz"],
+  ["Let me move on to the next point.", "płynnie przejść do kolejnego tematu"],
+  ["I didn’t quite catch the last part.", "zareagować, gdy fragment wypowiedzi umknął"],
+  ["Hi, this is Marta calling from emagine.", "naturalnie przedstawić się na początku rozmowy"],
+  ["I’m calling regarding an opportunity that may be relevant to you.", "wyjaśnić powód kontaktu"],
+  ["Is now still a good time?", "sprawdzić dostępność kandydata"],
+  ["Would you be open to hearing about a new opportunity?", "sprawdzić otwartość na ofertę bez nacisku"],
+  ["I’m calling regarding an opportunity that may be relevant to you.", "poprowadzić pierwszą minutę screeningu"],
+  ["Could you walk me through your current role?", "zaprosić kandydata do krótkiego opisu obecnej roli"],
+  ["Which technologies do you work with most often?", "ustalić najczęściej używane technologie"],
+  ["What is your current notice period?", "zapytać o okres wypowiedzenia"],
+  ["What rate range would you be looking for?", "zapytać o oczekiwania finansowe"],
+  ["Could you walk me through your current role?", "otworzyć pełną sekcję screeningu"],
+  ["I came across your profile while looking for…", "rozpocząć krótką wiadomość sourcingową"],
+  ["I just wanted to follow up on my previous message.", "napisać uprzejmy follow-up"],
+  ["Based on your experience with…", "spersonalizować wiadomość bez przesady"],
+  ["Would you be available for a short introductory call?", "zaproponować krótki screening w wiadomości"],
+  ["I just wanted to follow up on my previous message.", "napisać spójną sekwencję pierwszego kontaktu i follow-upu"],
+  ["Thanks for getting back to me.", "odpowiedzieć na zainteresowanie kandydata"],
+  ["I completely understand.", "odpowiedzieć na brak zainteresowania bez nacisku"],
+  ["Of course. I’ll send you the key details.", "odpowiedzieć na prośbę o szczegóły"],
+  ["I wanted to check in and see how things are going.", "wrócić do kandydata po ciszy"],
+  ["I completely understand.", "obsłużyć różne odpowiedzi kandydata w krótkich wiadomościach"],
+  ["Could you give me a brief overview of your career so far?", "poprosić o zwięzły przegląd kariery"],
+  ["What are you personally responsible for?", "oddzielić osobisty wkład od pracy zespołu"],
+  ["What kind of product are you working on?", "zrozumieć kontekst produktu lub systemu"],
+  ["Which tools do you use on a daily basis?", "ustalić narzędzia używane na co dzień"],
+  ["What are you personally responsible for?", "zbudować konkretny obraz profilu technicznego"],
+  ["How much hands-on experience do you have with…?", "sprawdzić praktyczne doświadczenie bez egzaminowania"],
+  ["Could you give me a recent example?", "poprosić o konkretny przykład"],
+  ["What level of ownership do you have?", "ustalić poziom odpowiedzialności i samodzielności"],
+  ["What is prompting you to consider a change?", "poznać motywację do zmiany"],
+  ["Could you give me a recent example?", "poprowadzić pogłębioną sekcję techniczną"],
+  ["Let me give you a quick overview of the role.", "rozpocząć krótki opis projektu"],
+  ["I can’t share the company name at this stage.", "opisać klienta bez ujawniania poufnych danych"],
+  ["The project involves…", "wyjaśnić, czego dotyczy projekt"],
+  ["You’d be responsible for…", "opisać codzienne obowiązki"],
+  ["Let me give you a quick overview of the role.", "zaprezentować projekt i rolę w dwóch minutach"],
+  ["The team currently consists of…", "opisać strukturę zespołu"],
+  ["The role is fully remote.", "jasno wyjaśnić model pracy"],
+  ["What made me think of your profile was…", "połączyć doświadczenie kandydata z rolą"],
+  ["How does that sound so far?", "sprawdzić reakcję kandydata na opis roli"],
+  ["What questions come to mind at this stage?", "zaprosić kandydata do pytań"],
+  ["What is your current notice period?", "ustalić dostępność i okres wypowiedzenia"],
+  ["What type of contract are you on at the moment?", "ustalić preferowany typ kontraktu"],
+  ["What salary range would you be looking for?", "zapytać o oczekiwania finansowe przy etacie"],
+  ["What hourly rate would you be looking for?", "zapytać o stawkę godzinową przy B2B"],
+  ["What salary range would you be looking for?", "przejść przez pełną sekcję o wynagrodzeniu"],
+  ["The current budget is slightly below that range.", "uczciwie powiedzieć o niższym budżecie"],
+  ["How flexible are you on the rate?", "sprawdzić elastyczność bez wywierania presji"],
+  ["Are you currently involved in any other recruitment processes?", "zapytać o inne procesy rekrutacyjne"],
+  ["How often do you use English in your current role?", "sprawdzić praktyczne użycie angielskiego"],
+  ["Let me summarise the practical details.", "podsumować logistykę i finanse"],
+  ["Let me quickly walk you through the next steps.", "jasno wyjaśnić kolejny etap procesu"],
+  ["What days and times would work best for you?", "zebrać dostępność kandydata"],
+  ["Just to confirm, the interview is scheduled for…", "potwierdzić termin rozmowy"],
+  ["The client needs to reschedule the interview.", "poinformować o zmianie terminu"],
+  ["Would another time work for you?", "zaproponować nowy termin"],
+  ["I’d like to help you prepare for the interview.", "zaoferować kandydatowi pomoc przed rozmową"],
+  ["The interview should take around an hour.", "ustawić oczekiwania dotyczące rozmowy"],
+  ["How are you feeling about the interview?", "sprawdzić samopoczucie kandydata przed interview"],
+  ["Good luck. I hope it goes well.", "zakończyć przygotowanie wspierającym akcentem"],
+  ["Is there anything you’d like to clarify beforehand?", "wyjaśnić ostatnie wątpliwości przed interview"],
+  ["I wanted to follow up on our last conversation.", "wrócić do kandydata z aktualizacją"],
+  ["How did the interview go from your perspective?", "zebrać perspektywę kandydata po rozmowie"],
+  ["We’re still waiting for the client’s final feedback.", "przekazać brak finalnej decyzji"],
+  ["I’ll keep you posted as soon as I hear back.", "zapewnić, że wrócisz z aktualizacją"],
+  ["I understand the time pressure.", "zareagować na frustrację i termin innej oferty"],
+  ["The client was very positive about your interview.", "przekazać pozytywną informację zwrotną"],
+  ["The main feedback was that…", "przekazać konkretny feedback w uporządkowany sposób"],
+  ["Unfortunately, the client has decided not to move forward.", "przekazać odrzucenie jasno i z szacunkiem"],
+  ["I haven’t received detailed feedback yet.", "uczciwie powiedzieć o braku szczegółowego feedbacku"],
+  ["Unfortunately, the client has decided not to move forward.", "poprowadzić trudną rozmowę o odrzuceniu"],
+  ["The client would like to make you an offer.", "jasno przekazać ofertę"],
+  ["The proposed rate is…", "przedstawić najważniejsze warunki oferty"],
+  ["What are your first thoughts?", "zebrać pierwszą reakcję kandydata"],
+  ["I understand your concern.", "uznać obawy dotyczące oferty"],
+  ["What are your first thoughts?", "przeprowadzić pełną rozmowę ofertową"],
+  ["Apart from compensation, what matters most in your decision?", "poznać kryteria decyzji poza wynagrodzeniem"],
+  ["That’s great to hear.", "naturalnie zareagować na akceptację oferty"],
+  ["Would you mind sharing what influenced your decision?", "poznać powód decyzji kandydata"],
+  ["Is everything on track for your start date?", "sprawdzić, czy onboarding przebiega zgodnie z planem"],
+  ["Apart from compensation, what matters most in your decision?", "poprowadzić rozmowę o kontrofertach i decyzji"],
+  ["I’ll briefly introduce the role, then I’d love to hear about your experience.", "ustawić strukturę pełnego screeningu"],
+  ["Could you tell me a little more about that?", "podtrzymać rozmowę bez sztywnego skryptu"],
+  ["That’s helpful context.", "uznać długi kontekst przed uporządkowaniem rozmowy"],
+  ["When you say X, what does that mean in practice?", "doprecyzować niejasną wypowiedź"],
+  ["What specifically were you responsible for?", "pogłębić trudny lub niejasny profil"],
+  ["I didn’t catch the name of that technology.", "poradzić sobie z szybkim tempem lub zakłóceniami"],
+  ["Let’s move on to…", "naturalnie kontrolować czas i zmianę tematów"],
+  ["I’ll focus on the key points.", "utrzymać rozmowę mimo kilku trudności naraz"],
+  ["I’ll start with a quick overview of the role.", "poprowadzić screening własnym, naturalnym stylem"],
+  ["Before we wrap up, let me summarise.", "domknąć pełną rozmowę i podsumować ustalenia"],
+];
 
 const distractorLessonIdsByModule = {
   1: [54, 78],
@@ -19,12 +125,12 @@ const capstoneDistractorLessonIds = {
 };
 
 export function getLessonQuiz(lesson) {
-  const answer = getLessonQuizAnswer(lesson);
+  const [answer, intention] = quizBlueprints[lesson.id] || [lesson.phrases[0], lesson.goal];
   const distractorIds = capstoneDistractorLessonIds[lesson.id] || distractorLessonIdsByModule[lesson.moduleId];
   const distractors = distractorIds.map((lessonId) => getLesson(lessonId).phrases[0]);
   const choices = [...new Set([answer, ...distractors])].filter(Boolean);
   const shift = lesson.id % choices.length;
   const options = [...choices.slice(shift), ...choices.slice(0, shift)];
 
-  return { answer, options };
+  return { answer, intention, options };
 }

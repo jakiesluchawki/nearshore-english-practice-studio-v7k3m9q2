@@ -35,7 +35,7 @@ for (const [lessonId, lines] of Object.entries(lessonDialogues)) {
 }
 
 const vite = await createServer({ configFile: false, server: { middlewareMode: true }, appType: "custom", logLevel: "silent" });
-const { lessons, lessonPrompt } = await vite.ssrLoadModule("/src/data/curriculum.js");
+const { answerReviewPrompt, lessons, lessonPrompt } = await vite.ssrLoadModule("/src/data/curriculum.js");
 const { getLessonQuiz, quizBlueprints } = await vite.ssrLoadModule("/src/data/quizzes.js");
 const { getLessonPractice } = await vite.ssrLoadModule("/src/data/practice.js");
 const { getDueReviewLessonId, scheduleReview } = await vite.ssrLoadModule("/src/data/reviews.js");
@@ -87,6 +87,25 @@ if (!lessonPrompt(lessons[20], "roleplay", "").includes("exchange of short messa
   console.error("ChatGPT prompts must distinguish written-message practice from spoken role-play.");
   await vite.close();
   process.exit(1);
+}
+
+const reviewAnswer = "Could you tell me briefly about your career so far?";
+const reviewPrompt = answerReviewPrompt(lessons[30], reviewAnswer, lessonDialogues[31]);
+const reviewContextChecks = [reviewAnswer, lessons[30].goal, lessons[30].scenario, ...lessons[30].phrases, ...lessonDialogues[31].flat(), "WERDYKT", "MINI PRAKTYKA"];
+if (!reviewContextChecks.every((value) => reviewPrompt.includes(value))) {
+  console.error("Answer-review prompts must include the learner answer, full lesson context, dialogue and structured coaching task.");
+  await vite.close();
+  process.exit(1);
+}
+
+for (const lesson of lessons) {
+  const prompt = answerReviewPrompt(lesson, reviewAnswer, lessonDialogues[lesson.id]);
+  const fullContext = [reviewAnswer, lesson.goal, lesson.scenario, ...lesson.phrases, ...lessonDialogues[lesson.id].flat()];
+  if (!fullContext.every((value) => prompt.includes(value))) {
+    console.error(`Answer-review prompt ${lesson.id} is missing lesson or dialogue context.`);
+    await vite.close();
+    process.exit(1);
+  }
 }
 
 if (Object.values(lessonDialogues).flat(2).some((value) => typeof value === "string" && value.includes("złotych per hour"))) {

@@ -40,7 +40,7 @@ export function getLessonPractice(lesson) {
       transformInstruction: `${lesson.goal}. Napisz jedną krótką, naturalną wersję po angielsku.`,
       pauseSeconds: 45,
       pauseLabel: "45 sekund na napisanie jest częścią ćwiczenia",
-      dialogueTitle: "Wstaw frazę do prawdziwej wymiany wiadomości.",
+      dialogueTitle: "Uzupełnij wymianę wiadomości własnym zdaniem.",
       finalTitle: checkpoint?.[0] || "Napisz wiadomość bez podglądania.",
       finalBody: checkpoint?.[1] || `Napisz krótką wiadomość dla sytuacji „${lesson.title}”. Użyj jednej frazy z lekcji, dopasuj ją do kontekstu i zakończ jasnym następnym krokiem.`,
     };
@@ -57,7 +57,7 @@ export function getLessonPractice(lesson) {
     transformInstruction: `${lesson.goal}. Powiedz jedną krótką, naturalną wersję po angielsku.`,
     pauseSeconds: 20,
     pauseLabel: "20 sekund ciszy jest częścią ćwiczenia",
-    dialogueTitle: "Wstaw frazę do prawdziwej wymiany.",
+    dialogueTitle: "Uzupełnij rozmowę własnym zdaniem.",
     finalTitle: checkpoint?.[0] || "Zamknij notatki. Poprowadź 60 sekund.",
     finalBody: checkpoint?.[1] || `Rozpocznij od sytuacji „${lesson.title}”, użyj co najmniej dwóch fraz i płynnie przejdź do kolejnego pytania. Nie zatrzymuj się, żeby poprawiać drobiazgi.`,
   };

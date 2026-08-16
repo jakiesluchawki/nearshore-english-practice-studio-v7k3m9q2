@@ -26,8 +26,9 @@ if (JSON.stringify(dialogueIds) !== JSON.stringify(expected)) {
 
 for (const [lessonId, lines] of Object.entries(lessonDialogues)) {
   const speakers = new Set(lines.map(([speaker]) => speaker));
+  const firstRecruiterTurn = lines.find(([speaker]) => speaker === "You")?.[1];
   const validLines = lines.length >= 2 && lines.length <= 4 && lines.every(([speaker, line]) => ["You", "Candidate"].includes(speaker) && line.trim());
-  if (!validLines || !speakers.has("You") || !speakers.has("Candidate")) {
+  if (!validLines || !speakers.has("You") || !speakers.has("Candidate") || !firstRecruiterTurn?.trim()) {
     console.error(`Mini-dialogue ${lessonId} must contain 2–4 non-empty turns from both You and Candidate.`);
     process.exit(1);
   }
@@ -63,7 +64,7 @@ for (const lesson of lessons) {
 
   const practice = getLessonPractice(lesson);
   const expectedPracticeType = lesson.moduleId === 3 ? "message" : "spoken";
-  if (lesson.practiceType !== expectedPracticeType || !practice.introTitle || !practice.finalTitle || !practice.finalBody) {
+  if (lesson.practiceType !== expectedPracticeType || !practice.introTitle || !practice.dialogueTitle.includes("własnym zdaniem") || !practice.finalTitle || !practice.finalBody) {
     console.error(`Lesson ${lesson.id} has an invalid ${lesson.practiceType} practice blueprint.`);
     await vite.close();
     process.exit(1);

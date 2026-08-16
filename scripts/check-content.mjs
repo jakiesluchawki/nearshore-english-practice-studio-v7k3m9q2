@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createServer } from "vite";
 import { lessonDialogues } from "../src/data/dialogues.js";
 
 const text = fs.readFileSync(new URL("../src/data/curriculum.md", import.meta.url), "utf8");
@@ -32,4 +33,20 @@ for (const [lessonId, lines] of Object.entries(lessonDialogues)) {
   }
 }
 
-console.log(`Content check passed: ${numbers.length} lessons, ${phrases.length} authored phrase packs and ${dialogueIds.length} mini-dialogues.`);
+const vite = await createServer({ configFile: false, server: { middlewareMode: true }, appType: "custom", logLevel: "silent" });
+const { lessons } = await vite.ssrLoadModule("/src/data/curriculum.js");
+const { getLessonQuiz } = await vite.ssrLoadModule("/src/data/quizzes.js");
+
+for (const lesson of lessons) {
+  const { answer, options } = getLessonQuiz(lesson);
+  const validQuiz = lesson.phrases.includes(answer) && options.length === 3 && new Set(options).size === 3 && options.filter((option) => option === answer).length === 1;
+  if (!validQuiz) {
+    console.error(`Quiz ${lesson.id} must contain one lesson answer and two unique distractors.`);
+    await vite.close();
+    process.exit(1);
+  }
+}
+
+await vite.close();
+
+console.log(`Content check passed: ${numbers.length} lessons, ${phrases.length} authored phrase packs, ${dialogueIds.length} mini-dialogues and ${lessons.length} quizzes.`);

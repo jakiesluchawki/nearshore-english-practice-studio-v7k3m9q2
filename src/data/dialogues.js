@@ -452,3 +452,24 @@ export function getLessonDialogue(lesson) {
     ["Candidate", "Thanks, that’s clear."],
   ];
 }
+
+export function getLessonQuizAnswer(lesson) {
+  const recruiterText = getLessonDialogue(lesson)
+    .filter(([speaker]) => speaker === "You")
+    .map(([, text]) => text.toLowerCase())
+    .join(" ");
+
+  const matchingPhrases = lesson.phrases
+    .map((phrase) => {
+      const searchablePart = phrase
+        .split("…")[0]
+        .replace(/[.!?]+$/, "")
+        .trim()
+        .toLowerCase();
+      return { phrase, searchablePart };
+    })
+    .filter(({ searchablePart }) => searchablePart.length >= 8 && recruiterText.includes(searchablePart))
+    .sort((a, b) => b.searchablePart.length - a.searchablePart.length);
+
+  return matchingPhrases[0]?.phrase || lesson.phrases[0];
+}

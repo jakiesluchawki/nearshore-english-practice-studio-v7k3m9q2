@@ -32,6 +32,8 @@ jobs:
         run: npm ci
       - name: Verify lesson content
         run: npm run test:content
+      - name: Verify all learning routes
+        run: npm run test:routes
       - name: Build GitHub Pages bundle
         run: npm run build:pages
       - name: Configure Pages

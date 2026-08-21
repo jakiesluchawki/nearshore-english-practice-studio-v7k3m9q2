@@ -1,7 +1,7 @@
 export const cheatSheets = [
   { id: "outreach", title: "Pierwsza wiadomość", subtitle: "Krótko, konkretnie, bez pustych komplementów", lessonIds: [21, 23, 24] },
-  { id: "first-call", title: "Pierwszy telefon", subtitle: "Otwarcie i ustawienie rozmowy", lessonIds: [1, 6, 11, 12] },
-  { id: "screening", title: "Pełny screening", subtitle: "Od hello do next steps", lessonIds: [13, 16, 17, 18, 19, 61] },
+  { id: "first-call", title: "Pierwszy telefon", subtitle: "12 kroków od hello do naturalnego zakończenia", lessonIds: [1, 12, 41, 14, 16, 17, 39, 51, 53, 58, 61, 100] },
+  { id: "screening", title: "Pełny screening", subtitle: "Cała rozmowa: profil, projekt, logistyka i kolejne kroki", lessonIds: [1, 12, 41, 14, 16, 17, 39, 51, 53, 58, 61, 100] },
   { id: "project", title: "Przedstawienie projektu", subtitle: "Rola, klient i sens biznesowy", lessonIds: [41, 42, 43, 44] },
   { id: "experience", title: "Doświadczenie i tech stack", subtitle: "Pytania, które docierają do konkretów", lessonIds: [31, 32, 34, 36, 37] },
   { id: "motivation", title: "Motywacja i oczekiwania", subtitle: "Bez sugerowania właściwej odpowiedzi", lessonIds: [14, 39, 48, 49] },

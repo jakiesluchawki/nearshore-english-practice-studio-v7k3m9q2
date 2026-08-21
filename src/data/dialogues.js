@@ -452,3 +452,17 @@ export function getLessonDialogue(lesson) {
     ["Candidate", "Thanks, that’s clear."],
   ];
 }
+
+export function getDialoguePracticeContext(lesson) {
+  const dialogue = getLessonDialogue(lesson);
+  const recruiterTurnIndex = dialogue.findIndex(([speaker]) => speaker === "You");
+  const candidateLead = recruiterTurnIndex > 0
+    ? dialogue.slice(0, recruiterTurnIndex).reverse().find(([speaker]) => speaker === "Candidate")?.[1] || ""
+    : "";
+  const recruiterModel = dialogue[recruiterTurnIndex]?.[1] || lesson.phrases[0];
+  const candidateFollowUp = recruiterTurnIndex >= 0
+    ? dialogue.slice(recruiterTurnIndex + 1).find(([speaker]) => speaker === "Candidate")?.[1] || ""
+    : "";
+
+  return { dialogue, recruiterTurnIndex, candidateLead, recruiterModel, candidateFollowUp };
+}

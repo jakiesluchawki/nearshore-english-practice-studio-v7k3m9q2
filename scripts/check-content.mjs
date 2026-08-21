@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { createServer } from "vite";
-import { lessonDialogues } from "../src/data/dialogues.js";
+import { getDialoguePracticeContext, lessonDialogues } from "../src/data/dialogues.js";
+import { screeningSteps } from "../src/data/screening.js";
 
 const text = fs.readFileSync(new URL("../src/data/curriculum.md", import.meta.url), "utf8");
 const matches = [...text.matchAll(/^### (\d+)\. /gm)];
@@ -38,7 +39,10 @@ const vite = await createServer({ configFile: false, server: { middlewareMode: t
 const { answerReviewPrompt, lessons, lessonPrompt } = await vite.ssrLoadModule("/src/data/curriculum.js");
 const { getLessonQuiz, quizBlueprints } = await vite.ssrLoadModule("/src/data/quizzes.js");
 const { getLessonPractice } = await vite.ssrLoadModule("/src/data/practice.js");
-const { getDueReviewLessonId, scheduleReview } = await vite.ssrLoadModule("/src/data/reviews.js");
+const {
+  getDuePhraseReviews, getDueReviewLessonId, getNextLessonId, getPracticeStreak,
+  ratePhraseProgress, scheduleReview,
+} = await vite.ssrLoadModule("/src/data/reviews.js");
 
 if (lessons.length !== 100 || quizBlueprints.length !== 101) {
   console.error(`Expected 100 runtime lessons and 100 authored quiz blueprints.`);
@@ -54,10 +58,28 @@ for (const lesson of lessons) {
     process.exit(1);
   }
 
-  const { answer, intention, options } = getLessonQuiz(lesson);
-  const validQuiz = lesson.phrases.includes(answer) && intention?.trim() && options.length === 3 && new Set(options).size === 3 && options.filter((option) => option === answer).length === 1;
+  const { answer, acceptedAnswers, intention, options } = getLessonQuiz(lesson);
+  const validQuiz = lesson.phrases.includes(answer) && intention?.trim() && options.length === 3
+    && new Set(options).size === 3 && options.filter((option) => option === answer).length === 1
+    && options.every((option) => lesson.phrases.includes(option))
+    && acceptedAnswers.includes(answer) && acceptedAnswers.every((option) => options.includes(option));
   if (!validQuiz) {
-    console.error(`Quiz ${lesson.id} must contain an authored intention, one lesson answer and two unique distractors.`);
+    console.error(`Quiz ${lesson.id} must contain an authored intention and three unique options from the same lesson.`);
+    await vite.close();
+    process.exit(1);
+  }
+
+  if (lesson.phrases.some((phrase) => phrase.includes("…") || /\bX\b/.test(phrase))) {
+    console.error(`Lesson ${lesson.id} contains an unfinished phrase instead of a complete reusable example.`);
+    await vite.close();
+    process.exit(1);
+  }
+
+  const context = getDialoguePracticeContext(lesson);
+  if (!context.recruiterModel || context.recruiterTurnIndex < 0
+    || context.recruiterTurnIndex === 0 && context.candidateLead
+    || context.candidateLead && context.recruiterTurnIndex < 1) {
+    console.error(`Lesson ${lesson.id} must preserve recruiter/candidate chronology in daily dialogue practice.`);
     await vite.close();
     process.exit(1);
   }
@@ -83,6 +105,84 @@ if (getDueReviewLessonId({ reviewSchedule: { 4: "2026-01-10", 2: "2026-01-09" } 
   process.exit(1);
 }
 
+if (getNextLessonId({ completed: [1, 63] }, lessons) !== 2 || getNextLessonId({ completed: [] }, lessons) !== 1) {
+  console.error("The main learning path must always continue from its first unfinished lesson.");
+  await vite.close();
+  process.exit(1);
+}
+
+if (getLessonQuiz(lessons[51]).answer !== "Do you have a preferred contract type?") {
+  console.error("Lesson 52 must accept the candidate's preferred contract type, not their current contract.");
+  await vite.close();
+  process.exit(1);
+}
+
+if (!getLessonQuiz(lessons[31]).acceptedAnswers.includes("Which areas do you own?")) {
+  console.error("Lesson 32 must accept genuinely equivalent questions about personal ownership.");
+  await vite.close();
+  process.exit(1);
+}
+
+const onePhraseReview = ratePhraseProgress(
+  { completed: [], myPhrases: [], phraseRatings: {}, phraseSchedule: {}, practiceDays: [] },
+  lessons[0].phrases[0],
+  "hard",
+  1,
+  new Date(2026, 0, 10, 12),
+);
+if (Object.keys(onePhraseReview.phraseSchedule).length !== 1
+  || onePhraseReview.phraseSchedule[lessons[0].phrases[0]].dueDate !== "2026-01-13"
+  || onePhraseReview.phraseSchedule[lessons[0].phrases[1]]) {
+  console.error("A phrase rating must schedule only the selected phrase, never the entire lesson.");
+  await vite.close();
+  process.exit(1);
+}
+
+const firstGoodReview = ratePhraseProgress(
+  { completed: [], myPhrases: [], phraseRatings: {}, phraseSchedule: {}, practiceDays: [] },
+  lessons[0].phrases[0], "good", 1, new Date(2026, 0, 10, 12),
+);
+const repeatedSameDay = ratePhraseProgress(firstGoodReview, lessons[0].phrases[0], "good", 1, new Date(2026, 0, 10, 18));
+const nextGoodReview = ratePhraseProgress(repeatedSameDay, lessons[0].phrases[0], "good", 1, new Date(2026, 0, 17, 12));
+if (repeatedSameDay.phraseSchedule[lessons[0].phrases[0]].interval !== 7
+  || nextGoodReview.phraseSchedule[lessons[0].phrases[0]].interval !== 21) {
+  console.error("A repeat on the same day must not accelerate spaced repetition; the next successful review should extend it to 21 days.");
+  await vite.close();
+  process.exit(1);
+}
+
+const favoriteReview = getDuePhraseReviews({ myPhrases: ["Saved recruiter phrase"], phraseSchedule: {} }, "2026-01-10");
+if (favoriteReview.length !== 1 || !favoriteReview[0].favorite || favoriteReview[0].dueDate !== "2026-01-10") {
+  console.error("A newly saved personal phrase must enter the next daily-practice queue.");
+  await vite.close();
+  process.exit(1);
+}
+
+const priorityReview = getDuePhraseReviews({
+  myPhrases: ["Saved recruiter phrase"],
+  phraseSchedule: { "Older ordinary phrase": { rating: "good", dueDate: "2026-01-01", interval: 7 } },
+}, "2026-01-10");
+if (priorityReview[0]?.phrase !== "Saved recruiter phrase") {
+  console.error("Saved phrases must take priority over unrelated older review items.");
+  await vite.close();
+  process.exit(1);
+}
+
+if (getPracticeStreak(["2026-01-08", "2026-01-09", "2026-01-10"], new Date(2026, 0, 10, 12)) !== 3
+  || getPracticeStreak(["2026-01-01", "2026-01-10"], new Date(2026, 0, 10, 12)) !== 1
+  || getPracticeStreak([], new Date(2026, 0, 10, 12)) !== 0) {
+  console.error("Practice streaks must count consecutive real practice days, not page visits.");
+  await vite.close();
+  process.exit(1);
+}
+
+if (screeningSteps.length !== 12 || new Set(screeningSteps.map((step) => step.id)).size !== 12
+  || screeningSteps.some((step) => !step.title || !step.goal || step.variants.length < 2 || step.variants.length > 4)) {
+  console.error("The first-call screening script must contain 12 unique steps with 2–4 natural variants each.");
+  await vite.close();
+  process.exit(1);
+}
+
 if (!lessonPrompt(lessons[20], "roleplay", "").includes("exchange of short messages") || !lessonPrompt(lessons[0], "roleplay", "").includes("spoken role-play")) {
   console.error("ChatGPT prompts must distinguish written-message practice from spoken role-play.");
   await vite.close();
@@ -94,6 +194,13 @@ const reviewPrompt = answerReviewPrompt(lessons[30], reviewAnswer, lessonDialogu
 const reviewContextChecks = [reviewAnswer, lessons[30].goal, lessons[30].scenario, ...lessons[30].phrases, ...lessonDialogues[31].flat(), "WERDYKT", "MINI PRAKTYKA"];
 if (!reviewContextChecks.every((value) => reviewPrompt.includes(value))) {
   console.error("Answer-review prompts must include the learner answer, full lesson context, dialogue and structured coaching task.");
+  await vite.close();
+  process.exit(1);
+}
+
+const personalizedReviewPrompt = answerReviewPrompt(lessons[30], reviewAnswer, lessonDialogues[31], ["My difficult phrase"], ["My favorite phrase"]);
+if (!personalizedReviewPrompt.includes("My difficult phrase") || !personalizedReviewPrompt.includes("My favorite phrase")) {
+  console.error("Answer-review prompts must include the learner's difficult and preferred reusable phrases.");
   await vite.close();
   process.exit(1);
 }
@@ -116,4 +223,4 @@ if (Object.values(lessonDialogues).flat(2).some((value) => typeof value === "str
 
 await vite.close();
 
-console.log(`Content check passed: ${numbers.length} lessons, ${phrases.length} authored phrase packs, ${dialogueIds.length} mini-dialogues, ${lessons.length} authored quizzes and review scheduling.`);
+console.log(`Content check passed: ${numbers.length} lessons, ${phrases.length} phrase packs, ${dialogueIds.length} dialogues, ${lessons.length} contextual quizzes, individual phrase reviews and ${screeningSteps.length} screening steps.`);

@@ -1,4 +1,5 @@
 import curriculumText from "./curriculum.md?raw";
+import { completeRecruiterPhrase } from "./phrase-examples.js";
 
 const moduleColors = [
   "rose",
@@ -117,7 +118,7 @@ function parseCourse() {
       const scope = stripMarkdown(readField(body, "Zakres"));
       const chatgpt = stripMarkdown(readField(body, "ChatGPT"));
       const phraseLine = readField(body, "Frazy");
-      const phrases = [...phraseLine.matchAll(/`([^`]+)`/g)].map((item) => item[1].trim());
+      const phrases = [...phraseLine.matchAll(/`([^`]+)`/g)].map((item) => completeRecruiterPhrase(item[1].trim()));
       const checkpoint = title.toLowerCase().includes("checkpoint") || extendedLessonIds.has(id);
       const practiceType = moduleId === 3 ? "message" : "spoken";
       const duration = id === 91 || id === 100 ? 30 : id === 99 ? 20 : checkpoint ? 18 : 16;
@@ -196,7 +197,7 @@ ${userInput?.trim() || "No additional question."}
 Use natural ${isMessagePractice ? "written" : "spoken"} English suitable for a capable B2 recruiter. Prefer sentences that are easy to ${isMessagePractice ? "write quickly" : "say under pressure"}. Avoid LinkedIn-style corporate language and unnecessary jargon. Ask one question at a time during role-play. Do not interrupt minor mistakes. After every three answers, give one important correction in Polish, one natural corrected version in English, and one reusable phrase. Never ask for or repeat real candidate data, confidential client names, or internal project details. Start now.`;
 }
 
-export function answerReviewPrompt(lesson, userAnswer, dialogue = []) {
+export function answerReviewPrompt(lesson, userAnswer, dialogue = [], hardPhrases = [], preferredPhrases = []) {
   const answer = userAnswer?.trim() || "No answer provided.";
   const answerTurnIndex = dialogue.findIndex(([speaker]) => speaker === "You");
   const modelAnswer = dialogue[answerTurnIndex]?.[1] || lesson.phrases[0];
@@ -213,6 +214,12 @@ Learning goal: ${lesson.goal}
 
 PHRASE PACK FROM THE LESSON
 ${lesson.phrases.map((phrase) => `- ${phrase}`).join("\n")}
+
+PHRASES I RECENTLY FOUND DIFFICULT
+${hardPhrases.length ? hardPhrases.map((phrase) => `- ${phrase}`).join("\n") : "- none recorded yet"}
+
+MY PREFERRED, REUSABLE PHRASES
+${preferredPhrases.length ? preferredPhrases.map((phrase) => `- ${phrase}`).join("\n") : "- none saved yet"}
 
 FULL DIALOGUE WITH MY ANSWER INSERTED
 ${dialogueWithAnswer || `Recruiter (my answer): ${answer}`}
@@ -236,6 +243,8 @@ Reply in this exact structure:
 4. NATURALNA WERSJA — give one corrected English version that keeps my meaning and is easy for a B2 recruiter to use.
 5. JESZCZE PROŚCIEJ — give one shorter English alternative for a stressful moment.
 6. MINI PRAKTYKA — give me one new but closely related situation in Polish and ask me to answer in English. Then stop and wait for my answer.
+
+When possible, build the follow-up practice around one of my difficult or preferred phrases so that the feedback transfers back into my real work.
 
 Never ask for real candidate data, confidential client names or internal project details. Start with the verdict now.`;
 }

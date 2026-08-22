@@ -1,4 +1,4 @@
-const CACHE_NAME = "nearshore-english-fieldwork-v1";
+const CACHE_NAME = "nearshore-english-fieldwork-v2-voice-review";
 const scopeUrl = new URL(self.registration.scope);
 
 function scopeAsset(path = "") {
@@ -58,8 +58,11 @@ self.addEventListener("fetch", (event) => {
       const cache = await caches.open(CACHE_NAME);
       try {
         const fresh = await fetch(request);
-        if (fresh.ok) await cache.put(scopeAsset(), fresh.clone());
-        return fresh;
+        if (fresh.ok) {
+          await cache.put(scopeAsset(), fresh.clone());
+          return fresh;
+        }
+        return (await cache.match(scopeAsset())) || fresh;
       } catch {
         return (await cache.match(scopeAsset())) || Response.error();
       }

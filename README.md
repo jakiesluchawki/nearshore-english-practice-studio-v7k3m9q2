@@ -10,8 +10,8 @@ Praktyczna aplikacja do codziennego angielskiego dla IT recruiterki pracującej 
 - oddzielne powtórki konkretnych fraz, własny phrasebook, historię praktyki i prawdziwą serię dni;
 - tryb „Help, My Brain Is Empty” z natychmiast dostępnymi zdaniami oraz 18 szybkich ściąg;
 - kompletny, 12-etapowy screening, zwarty tryb rozmowy i osobisty skrypt budowany z zapisanych fraz;
-- odsłuch wymowy, opcjonalne lokalne nagrywanie i rozpoznawanie mowy w obsługiwanych przeglądarkach;
-- generator promptów z kontekstem lekcji i własnych fraz, bez klucza API i automatycznego wysyłania danych;
+- odsłuch wymowy, wyraźnie oddzielone lokalne nagrywanie i dyktowanie odpowiedzi oraz pomoc przy problemach z mikrofonem;
+- ocenę pojedynczej odpowiedzi albo pełnej rozmowy przez gotowy prompt do ChatGPT, bez klucza API i automatycznego wysyłania danych;
 - lokalny eksport i import postępu między przeglądarkami.
 - rozgałęzione symulacje rozmów z ośmioma kandydatami, w formatach 5, 15 i 30 minut;
 - trening refleksu, odsłuch kandydata przed pokazaniem tekstu i pełny transcript do oceny w ChatGPT;
@@ -24,7 +24,7 @@ Praktyczna aplikacja do codziennego angielskiego dla IT recruiterki pracującej 
 
 Brama hasłowa działa po stronie przeglądarki i ma ograniczyć przypadkowy dostęp. GitHub Pages jest hostingiem statycznym, więc nie jest to zabezpieczenie odpowiednie dla poufnych danych. Aplikacja nie zawiera danych kandydatów ani klientów.
 
-Nagrania odpowiedzi pozostają w bieżącej karcie. Opcjonalne rozpoznawanie mowy jest funkcją przeglądarki i, zależnie od jej dostawcy, może wykorzystywać jego usługę. Mikrofon uruchamia się dopiero po wyraźnej akcji użytkowniczki.
+Nagrania odpowiedzi pozostają w bieżącej karcie i służą wyłącznie do odsłuchu. Dyktowanie wpisuje tekst do pola odpowiedzi, ale jest funkcją przeglądarki i, zależnie od jej dostawcy, może wykorzystywać jego usługę oraz wymagać internetu. W Brave usługa może być niedostępna mimo działającego mikrofonu; wtedy można użyć systemowego dyktowania albo innej przeglądarki. Mikrofon uruchamia się dopiero po wyraźnej akcji użytkowniczki. Ocena odpowiedzi powstaje dopiero po samodzielnym wklejeniu promptu do ChatGPT.
 
 ## Lokalne uruchomienie
 
@@ -37,6 +37,10 @@ npm run dev
 
 ```bash
 npm run test:content
+npm run test:fieldwork
+npm run test:voice
+npm run test:privacy
+npm run test:pwa
 npm run test:routes
 npm run build:pages
 npm run build

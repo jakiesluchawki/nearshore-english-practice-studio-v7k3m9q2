@@ -34,6 +34,10 @@ jobs:
         run: npm run test:content
       - name: Verify realistic conversation studio
         run: npm run test:fieldwork
+      - name: Verify microphone and speech recognition fallbacks
+        run: npm run test:voice
+      - name: Verify safe handling of candidate contact details
+        run: npm run test:privacy
       - name: Verify offline application
         run: npm run test:pwa
       - name: Verify all learning routes

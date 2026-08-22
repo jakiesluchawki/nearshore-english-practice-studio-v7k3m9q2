@@ -3,8 +3,10 @@ import { readFileSync, statSync } from "node:fs";
 import {
   advanceCallTurn, callModes, candidateScenarios, difficultSituations, getRolePack,
   listeningScenarios, makeBriefLines, makeCallPrompt, makePracticePrompt,
-  polishCalques, rolePacks, scenarioStepLine, stakeholderScenarios, writingScenarios,
+  makeTurnReviewPrompt, openingModel, polishCalques, rolePacks, scenarioStepLine,
+  stakeholderScenarios, writingScenarios,
 } from "../src/data/fieldwork.js";
+import { containsPersonalContact } from "../src/data/privacy.js";
 import { screeningSteps } from "../src/data/screening.js";
 
 const unique = (items, label) => {
@@ -105,6 +107,63 @@ const answerPrompt = makePracticePrompt({
 for (const required of ["I live in Gdańsk.", "I will confirm the remote setup.", "I will come back to you.", "Is there flexibility?"]) {
   assert.ok(answerPrompt.includes(required), `The answer-review prompt is missing: ${required}`);
 }
+assert.ok(answerPrompt.includes("<learner_answer>"), "Every practice prompt must isolate the learner's exact words from its instructions.");
+assert.ok(answerPrompt.includes("WERDYKT"), "Every practice prompt must ask for a concrete Polish verdict.");
+
+const liveCandidate = candidateScenarios[0];
+const beforeFirstAnswer = [{ speaker: "candidate", text: liveCandidate.opening }];
+const firstReply = "I can share the current range. Which rate would make a change worthwhile?";
+const firstTurnPrompt = makeTurnReviewPrompt({
+  scenario: liveCandidate, mode: callModes[0], step: 0, stageTitle: "First response",
+  goal: "Answer the actual budget question before continuing.", answer: firstReply,
+  candidate: liveCandidate.opening, history: beforeFirstAnswer, strategy: "understand",
+  favoritePhrases: ["I can check the current budget."], difficultPhrases: ["What rate works for you?"],
+});
+for (const required of [liveCandidate.opening, firstReply, openingModel(liveCandidate), liveCandidate.role,
+  liveCandidate.stack, "Answer the actual budget question", "I can check the current budget.", "What rate works for you?",
+  "Judge the actual words independently", "WERDYKT"]) {
+  assert.ok(firstTurnPrompt.includes(required), `The live first-turn review is missing: ${required}`);
+}
+assert.ok(!firstTurnPrompt.includes(liveCandidate.accepted), "A single-turn prompt must not leak a future candidate response.");
+
+const beforeObjectionAnswer = [
+  { speaker: "candidate", text: liveCandidate.opening },
+  { speaker: "recruiter", text: firstReply },
+  { speaker: "candidate", text: liveCandidate.obstacle },
+];
+const objectionReply = "That is clear. I will check whether the client can improve the budget.";
+const objectionPrompt = makeTurnReviewPrompt({
+  scenario: liveCandidate, mode: callModes[1], step: 2, stageTitle: "Budget objection",
+  goal: "Acknowledge the concern without inventing an approval.", answer: objectionReply,
+  history: beforeObjectionAnswer, strategy: "continue", challenge: true,
+  referenceAnswer: liveCandidate.strong,
+});
+for (const required of [liveCandidate.opening, firstReply, liveCandidate.obstacle, objectionReply, liveCandidate.strong,
+  "unexpected objection", "Acknowledge the concern"]) {
+  assert.ok(objectionPrompt.includes(required), `The live objection review is missing: ${required}`);
+}
+assert.ok(!objectionPrompt.includes(liveCandidate.accepted), "The objection review must stop at the answer being assessed.");
+assert.equal(makeTurnReviewPrompt({ scenario: liveCandidate, mode: callModes[0], answer: "   " }), "",
+  "Empty simulator answers must not create misleading evaluation prompts.");
+
+const realisticRecruiterPrompt = makeTurnReviewPrompt({
+  scenario: liveCandidate, mode: callModes[0], step: 0,
+  answer: "The start date is 2026-10-01, and the monthly budget is 20 000 - 25 000 PLN.",
+  candidate: liveCandidate.opening, history: beforeFirstAnswer,
+});
+assert.ok(!containsPersonalContact(realisticRecruiterPrompt),
+  "Real recruitment dates and salary ranges must not prevent a safe ChatGPT answer review.");
+assert.ok(containsPersonalContact(`${realisticRecruiterPrompt}\nContact: candidate@example.com`),
+  "A recruiter prompt containing actual candidate contact information must be blocked.");
+
+const ungradedSimulatorTurn = advanceCallTurn({
+  scenario: liveCandidate, mode: callModes[0], step: 0,
+  answer: "banana refrigerator 123", intention: "understand",
+  transcript: beforeFirstAnswer, challenge: false, challengeDone: false,
+  referenceAnswer: openingModel(liveCandidate),
+});
+assert.match(ungradedSimulatorTurn.feedback, /nie ocena twojego angielskiego/i,
+  "The simulator must clearly disclose that continuing the scenario is not an English-quality assessment.");
 
 const writingPrompt = makePracticePrompt({
   title: "Interview follow-up", context: "Send a brief update.", answer: "I will keep you posted.",

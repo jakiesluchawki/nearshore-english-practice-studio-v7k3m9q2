@@ -205,6 +205,41 @@ if (!personalizedReviewPrompt.includes("My difficult phrase") || !personalizedRe
   process.exit(1);
 }
 
+const intentionOnlyReview = answerReviewPrompt(
+  lessons[30], reviewAnswer, [["You", "Could you briefly summarize your background?"]], [], [],
+  { kind: "lesson-transform", intention: "poprosić o zwięzły przegląd kariery", reference: "Could you briefly summarize your background?" },
+);
+if (!intentionOnlyReview.includes("poprosić o zwięzły przegląd kariery")
+  || !intentionOnlyReview.includes("Could you briefly summarize your background?")
+  || intentionOnlyReview.includes("Candidate: I started in QA")) {
+  console.error("Standalone speaking exercises must receive their exact intention without an unrelated candidate dialogue.");
+  await vite.close();
+  process.exit(1);
+}
+
+const writtenTransformReview = answerReviewPrompt(
+  lessons[20], "Would you be open to a quick conversation about this role?",
+  [["You", lessons[20].phrases[0]]], [], [],
+  { kind: "lesson-transform", intention: lessons[20].goal, reference: lessons[20].phrases[0] },
+);
+if (!writtenTransformReview.includes("write one natural English recruiter message")
+  || writtenTransformReview.includes("say one natural English sentence")) {
+  console.error("Written lesson exercises must ask ChatGPT to assess a recruiter message rather than a spoken answer.");
+  await vite.close();
+  process.exit(1);
+}
+
+const writtenTranslationReview = answerReviewPrompt(
+  lessons[20], "Would you be interested in learning more?", [["You", lessons[20].phrases[0]]], [], [],
+  { kind: "translation", intention: lessons[20].goal, reference: lessons[20].phrases[0] },
+);
+if (!writtenTranslationReview.includes("natural written recruiter message")
+  || writtenTranslationReview.includes("natural spoken English")) {
+  console.error("Written daily translation practice must not be described to ChatGPT as spoken English.");
+  await vite.close();
+  process.exit(1);
+}
+
 for (const lesson of lessons) {
   const prompt = answerReviewPrompt(lesson, reviewAnswer, lessonDialogues[lesson.id]);
   const fullContext = [reviewAnswer, lesson.goal, lesson.scenario, ...lesson.phrases, ...lessonDialogues[lesson.id].flat()];

@@ -12,6 +12,8 @@
     "test:content": "node scripts/check-content.mjs",
     "test:routes": "node scripts/check-routes.mjs",
     "test:fieldwork": "node scripts/check-fieldwork.mjs",
+    "test:voice": "node --test tests/voice-practice.test.mjs",
+    "test:privacy": "node --test tests/privacy.test.mjs",
     "test:pwa": "node --test tests/service-worker.test.mjs"
   },
   "dependencies": {

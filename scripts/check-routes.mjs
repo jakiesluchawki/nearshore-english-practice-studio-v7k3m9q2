@@ -31,6 +31,16 @@ try {
     if (lessonId === 99 && !page.includes("script-builder")) {
       throw new Error("Lesson 99 must render the real personal-screening builder.");
     }
+    const transformStart = page.indexOf('class="lesson-block split-practice"');
+    const dialogueStart = page.indexOf('class="lesson-block lesson-block--dialogue"', transformStart);
+    const transformation = page.slice(transformStart, dialogueStart);
+    const reviewButton = transformation.match(/<button[^>]*class="dialogue-ai-button lesson-answer-review"[^>]*>/)?.[0];
+    if (!reviewButton?.includes('disabled=""') || !transformation.includes("Niech ChatGPT oceni tę odpowiedź")) {
+      throw new Error(`Lesson ${lessonId} must offer a dedicated contextual ChatGPT review in its transformation exercise.`);
+    }
+    if (!transformation.includes("voice-practice--unavailable") || !transformation.includes("dyktowania systemowego")) {
+      throw new Error(`Lesson ${lessonId} must explain the safe manual fallback when speech APIs are unavailable.`);
+    }
     const moduleId = Math.ceil(lessonId / 10);
     if (!page.includes(`assets/modules/module-${String(moduleId).padStart(2, "0")}.webp`)) {
       throw new Error(`Lesson ${lessonId} must show the original felt illustration for its module.`);
@@ -61,6 +71,15 @@ try {
     if (!render(route).includes(marker)) {
       throw new Error(`The ${route} route did not render its primary product surface.`);
     }
+  }
+
+  for (const route of ["studio/reflex", "studio/situations", "studio/team"]) {
+    if (!render(route).includes("Oceń tę odpowiedź w ChatGPT")) {
+      throw new Error(`${route} must make contextual answer evaluation visible before revealing a model response.`);
+    }
+  }
+  if (!render("studio/messages").includes("Oceń tę wiadomość w ChatGPT")) {
+    throw new Error("Written-message practice must offer contextual review without waiting for its example.");
   }
 
   const specificBrief = render("studio/prepare/devops");

@@ -197,12 +197,26 @@ ${userInput?.trim() || "No additional question."}
 Use natural ${isMessagePractice ? "written" : "spoken"} English suitable for a capable B2 recruiter. Prefer sentences that are easy to ${isMessagePractice ? "write quickly" : "say under pressure"}. Avoid LinkedIn-style corporate language and unnecessary jargon. Ask one question at a time during role-play. Do not interrupt minor mistakes. After every three answers, give one important correction in Polish, one natural corrected version in English, and one reusable phrase. Never ask for or repeat real candidate data, confidential client names, or internal project details. Start now.`;
 }
 
-export function answerReviewPrompt(lesson, userAnswer, dialogue = [], hardPhrases = [], preferredPhrases = []) {
+export function answerReviewPrompt(lesson, userAnswer, dialogue = [], hardPhrases = [], preferredPhrases = [], reviewContext = {}) {
   const answer = userAnswer?.trim() || "No answer provided.";
   const answerTurnIndex = dialogue.findIndex(([speaker]) => speaker === "You");
-  const modelAnswer = dialogue[answerTurnIndex]?.[1] || lesson.phrases[0];
+  const modelAnswer = reviewContext.reference || dialogue[answerTurnIndex]?.[1] || lesson.phrases[0];
   const dialogueWithAnswer = dialogue.map(([speaker, text], index) => `${speaker === "You" ? "Recruiter" : "Candidate"}${index === answerTurnIndex ? " (my answer)" : ""}: ${index === answerTurnIndex ? answer : text}`).join("\n");
   const isMessagePractice = lesson.practiceType === "message";
+  const specificIntention = reviewContext.intention || lesson.goal;
+  const precedingCandidate = reviewContext.candidate
+    || (answerTurnIndex > 0 && dialogue[answerTurnIndex - 1]?.[0] !== "You" ? dialogue[answerTurnIndex - 1][1] : "");
+  const exerciseKind = reviewContext.kind === "translation"
+    ? isMessagePractice
+      ? "turn a precise Polish intention into a natural written recruiter message"
+      : "turn a precise Polish intention into natural spoken English"
+    : reviewContext.kind === "lesson-transform"
+      ? isMessagePractice
+        ? "write one natural English recruiter message for the current lesson goal"
+        : "say one natural English sentence for the current lesson goal"
+      : reviewContext.kind === "dialogue"
+        ? "respond to the current candidate turn in a realistic dialogue"
+        : "answer in the precise context of this recruitment lesson";
 
   return `You are my practical English coach. I am a Polish B2-level IT recruiter working in a nearshore team and I use English in almost every candidate conversation. I understand English well, but I sometimes freeze when I have to respond unexpectedly. Help me build language that is natural, professional and easy to ${isMessagePractice ? "write quickly" : "say under pressure"}. Do not make it sound corporate, formal or more advanced than necessary.
 
@@ -211,6 +225,9 @@ Lesson: ${lesson.id}: ${lesson.title}
 Practice channel: ${isMessagePractice ? "a short written recruiter message" : "a spoken recruiter conversation"}
 Situation: ${lesson.scenario}
 Learning goal: ${lesson.goal}
+Specific exercise: ${exerciseKind}
+Exact intention for this answer: ${specificIntention}
+${precedingCandidate ? `Candidate's immediately preceding words: ${precedingCandidate}` : "The recruiter is initiating this part of the exchange."}
 
 PHRASE PACK FROM THE LESSON
 ${lesson.phrases.map((phrase) => `- ${phrase}`).join("\n")}

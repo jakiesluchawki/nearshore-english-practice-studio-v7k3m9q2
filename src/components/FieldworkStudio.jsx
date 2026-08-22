@@ -7,11 +7,12 @@ import {
 } from "@phosphor-icons/react";
 import { PracticeTimer, VoicePractice, speakPhrase } from "./LearningExperience.jsx";
 import { formatLocalDate, withPracticeDay } from "../data/reviews.js";
+import { containsPersonalContact, withoutPersonalContacts } from "../data/privacy.js";
 import { screeningSteps } from "../data/screening.js";
 import {
   advanceCallTurn, callModes, candidateScenarios, difficultSituations, getRolePack,
-  listeningScenarios, makeBriefLines, makeCallPrompt, makePracticePrompt,
-  polishCalques, rolePacks, scenarioStepLine, stakeholderScenarios, writingScenarios,
+  listeningScenarios, makeBriefLines, makeCallPrompt, makePracticePrompt, makeTurnReviewPrompt,
+  openingModel, polishCalques, rolePacks, scenarioStepLine, stakeholderScenarios, writingScenarios,
 } from "../data/fieldwork.js";
 
 const asset = (path) => `${import.meta.env.BASE_URL}${path}`;
@@ -37,16 +38,11 @@ function logPractice(updateProgress, kind, reference, responses = 1) {
 
 function favoritesAndDifficult(progress) {
   return {
-    favoritePhrases: (progress.myPhrases || []).slice(0, 10),
-    difficultPhrases: Object.entries(progress.phraseSchedule || {})
+    favoritePhrases: withoutPersonalContacts(progress.myPhrases || []).slice(0, 10),
+    difficultPhrases: withoutPersonalContacts(Object.entries(progress.phraseSchedule || {})
       .filter(([, entry]) => entry.rating === "again" || entry.rating === "hard")
-      .map(([phrase]) => phrase).slice(0, 10),
+      .map(([phrase]) => phrase)).slice(0, 10),
   };
-}
-
-function hasPersonalDetails(value) {
-  return /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value)
-    || /(?:\+?\d[\s().-]*){8,}/.test(value);
 }
 
 async function putOnClipboard(text) {
@@ -68,19 +64,22 @@ async function putOnClipboard(text) {
 
 function PromptHandoff({ prompt, label = "Niech ChatGPT oceni odpowiedź", compact = false, disabled = false }) {
   const [notice, setNotice] = useState("");
+  const includesContactDetails = Boolean(prompt && containsPersonalContact(prompt));
+  const unavailable = disabled || !prompt || includesContactDetails;
   async function handle(open) {
-    if (!prompt || disabled) return;
+    if (unavailable) return;
     const copying = putOnClipboard(prompt);
     if (open) window.open("https://chatgpt.com/", "_blank", "noopener,noreferrer");
     const copied = await copying;
     setNotice(copied ? "Prompt skopiowany. Wklej go w ChatGPT." : "Przeglądarka zablokowała schowek. Skopiuj prompt z podglądu.");
   }
   return <div className={`field-prompt ${compact ? "field-prompt--compact" : ""}`}>
-    <button type="button" className="button button--violet" disabled={disabled || !prompt} onClick={() => handle(true)}>
+    <button type="button" className="button button--violet" disabled={unavailable} onClick={() => handle(true)}>
       <ChatCircleDots size={18} /> {label}
     </button>
-    <details className="field-prompt-preview"><summary>Podgląd kontekstu</summary><textarea readOnly aria-label="Pełny prompt dla ChatGPT" value={prompt || ""} /><button type="button" onClick={() => handle(false)}><Copy size={15} /> Tylko skopiuj</button></details>
-    <span className="field-prompt-privacy"><ShieldCheck size={14} /> Prompt jest przenoszony do ChatGPT. Nie wpisuj nazwisk, e-maili ani poufnych danych.</span>
+    {prompt && !includesContactDetails && <details className="field-prompt-preview"><summary>Podgląd pełnego kontekstu odpowiedzi</summary><textarea readOnly aria-label="Pełny prompt dla ChatGPT" value={prompt} /><button type="button" onClick={() => handle(false)}><Copy size={15} /> Tylko skopiuj</button></details>}
+    {includesContactDetails && <p className="field-prompt-warning" role="alert"><WarningCircle size={16} /> Usuń adres e-mail lub numer telefonu. Prompt nie może zawierać danych kandydata.</p>}
+    <span className="field-prompt-privacy"><ShieldCheck size={14} /> Ocena pojawi się dopiero po wklejeniu promptu w ChatGPT. Aplikacja niczego nie wysyła.</span>
     {notice && <p role="status"><CheckCircle size={16} /> {notice}</p>}
   </div>;
 }
@@ -142,23 +141,48 @@ function CallSimulator({ progress, updateProgress, navigate, initialRole }) {
   const [challengeDone, setChallengeDone] = useState(false);
   const [coach, setCoach] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [lastTurnReview, setLastTurnReview] = useState(null);
   const scenario = candidateScenarios.find((item) => item.id === scenarioId) || candidateScenarios[0];
   const mode = callModes.find((item) => item.id === modeId) || callModes[1];
   const stepId = mode.stepIds[step];
   const currentStep = screeningSteps.find((item) => item.id === stepId);
   const prompt = makeCallPrompt({ scenario, mode, transcript, ...favoritesAndDifficult(progress) });
+  const candidateLine = [...transcript].reverse().find((turn) => turn.speaker === "candidate")?.text || "";
+  const stageTitle = challenge ? "Unexpected objection" : step === 0 ? "First response to the candidate" : currentStep?.title || "Candidate conversation";
+  const stageGoal = challenge
+    ? "odpowiedzieć na rzeczywistą obawę kandydata, nie obiecując niczego bez potwierdzenia"
+    : step === 0
+      ? "odpowiedzieć na pierwsze pytanie kandydata, a potem spokojnie ustawić rozmowę"
+      : currentStep?.goal || "odpowiedzieć kandydatowi jasno i naturalnie";
+  const turnReference = challenge ? scenario.strong : step === 0 ? openingModel(scenario) : currentStep?.variants[0] || scenario.strong;
+  const currentTurnPrompt = makeTurnReviewPrompt({
+    scenario, mode, step, stageTitle, goal: stageGoal, answer, candidate: candidateLine,
+    history: transcript, referenceAnswer: turnReference, strategy: intention, challenge,
+    ...favoritesAndDifficult(progress),
+  });
 
   function start() {
     setActive(true); setFinished(false); setStep(0); setAnswer(""); setChallenge(false); setChallengeDone(false); setCoach(""); setFeedback("");
+    setLastTurnReview(null);
     setTranscript([{ speaker: "candidate", text: scenario.opening }]);
   }
 
   function reply() {
+    const originalAnswer = answer.trim();
+    if (containsPersonalContact(originalAnswer)) return;
     const next = advanceCallTurn({
       scenario, mode, step, answer, intention, transcript, challenge, challengeDone,
       referenceAnswer: currentStep?.variants[0],
     });
     if (!next) return;
+    setLastTurnReview({
+      answer: originalAnswer,
+      prompt: makeTurnReviewPrompt({
+        scenario, mode, step, stageTitle, goal: stageGoal, answer: originalAnswer,
+        candidate: candidateLine, history: transcript, referenceAnswer: next.coach || turnReference,
+        strategy: intention, challenge, ...favoritesAndDifficult(progress),
+      }),
+    });
     setAnswer(""); setTranscript(next.transcript); setStep(next.step); setChallenge(next.challenge);
     setChallengeDone(next.challengeDone); setCoach(next.coach); setFeedback(next.feedback); setIntention("understand");
     if (next.finished) {
@@ -167,10 +191,28 @@ function CallSimulator({ progress, updateProgress, navigate, initialRole }) {
     }
   }
 
-  return <StudioPage navigate={navigate} eyebrow="Symulator pełnej rozmowy" title="Kandydat ma swój plan." description="Najpierw odpowiedz własnym zdaniem. Kierunek rozmowy wybierasz świadomie, a prawdziwą ocenę języka zostawiasz ChatGPT." illustration={10} className="simulator-page">
-    {!active && !finished && <section className="simulator-setup"><div className="candidate-picker"><span className="eyebrow">Wybierz, kto odbiera</span>{candidateScenarios.map((item) => <button key={item.id} type="button" aria-pressed={item.id === scenarioId} onClick={() => { setScenarioId(item.id); if (item.id === "five-minutes") setModeId("quick"); }}><span>{item.role}</span><strong>{item.name}</strong><small>{item.temperament} · {item.difficulty}</small></button>)}</div><div className="mode-picker"><span className="eyebrow">{scenario.id === "five-minutes" ? "Kandydat ma tylko pięć minut, więc szanujesz jego czas." : "Ile masz czasu?"}</span>{callModes.map((item) => <button key={item.id} type="button" aria-pressed={item.id === modeId} disabled={scenario.id === "five-minutes" && item.id !== "quick"} onClick={() => setModeId(item.id)}><strong>{item.minutes} min</strong><span>{item.title}</span><small>{item.stepIds.length} etapów</small></button>)}</div><button type="button" className="button button--violet simulator-start" onClick={start}><PhoneCall size={19} /> Odbierz telefon</button></section>}
-    {active && <section className="live-call"><header className="live-call-bar"><span><span className="live-dot" /> Rozmowa trwa · {scenario.role}</span><strong>{step + 1} / {mode.stepIds.length}</strong><PracticeTimer seconds={mode.minutes * 60} lessonKey={`call-${scenario.id}-${mode.id}`} title="Czas rozmowy" compact autoStart /></header><div className="call-progress-track"><i style={{ width: `${((step + (challenge ? .5 : 0)) / mode.stepIds.length) * 100}%` }} /></div><div className="call-history" aria-live="polite">{transcript.map((turn, index) => <article key={`${index}-${turn.speaker}`} className={`call-turn call-turn--${turn.speaker}`}><span>{turn.speaker === "candidate" ? "Candidate" : "You"}</span><p lang="en">{turn.text}</p>{turn.speaker === "candidate" && index === transcript.length - 1 && <ListenButton phrase={turn.text} label="Odsłuchaj pytanie" />}</article>)}</div><div className="call-response"><div className="call-current-intent"><span className="eyebrow">{challenge ? "Niespodziewany zwrot" : `Etap ${step + 1}: ${currentStep?.title || "Rozmowa"}`}</span><p>{challenge ? "Kandydat stawia warunek. Odpowiedz spokojnie, nie wymyślaj potwierdzeń." : step === 0 ? "Najpierw odpowiedz na to, co kandydat właśnie powiedział. Dopiero potem spokojnie ustaw rozmowę." : currentStep?.goal}</p></div><label htmlFor="simulation-answer">Twoja odpowiedź po angielsku</label><textarea id="simulation-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="Powiedz to na głos, a potem wpisz własną odpowiedź…" /><VoicePractice lessonKey={`simulation-${scenario.id}-${step}-${challenge}`} onTranscript={setAnswer} /><fieldset className="strategy-picker"><legend>W jakim kierunku prowadzisz rozmowę?</legend>{[["understand", "Uznaj obawę i doprecyzuj"], ["continue", "Odpowiedz i przejdź dalej"], ["avoid", "Pomiń ten temat"]].map(([id, label]) => <label key={id}><input type="radio" name="call-strategy" value={id} checked={intention === id} onChange={() => setIntention(id)} /><span>{label}</span></label>)}</fieldset><button type="button" className="button button--violet" disabled={!answer.trim()} onClick={reply}>Wstaw do rozmowy <ArrowRight size={17} /></button></div>{coach && <div className="field-coach" role="status"><Sparkle size={19} /><div><p>{feedback}</p><strong lang="en">{coach}</strong><div className="field-model-actions"><ListenButton phrase={coach} /><SavePhraseButton phrase={coach} progress={progress} updateProgress={updateProgress} compact /></div></div></div>}</section>}
-    {finished && <section className="call-summary"><CheckCircle size={38} weight="fill" /><span className="eyebrow">Rozmowa zakończona</span><h2>Przeszłaś przez {transcript.filter((turn) => turn.speaker === "recruiter").length} prawdziwych odpowiedzi.</h2><p>Teraz oddaj całą rozmowę do oceny, razem z twoimi dokładnymi odpowiedziami, preferowanymi frazami i trudnymi momentami.</p><details className="transcript-review"><summary>Pokaż pełny zapis rozmowy</summary>{transcript.map((turn, index) => <p key={`${index}-${turn.speaker}`}><strong>{turn.speaker === "candidate" ? "Candidate" : "You"}:</strong> <span lang="en">{turn.text}</span></p>)}</details><PromptHandoff prompt={prompt} label="Niech ChatGPT oceni całą rozmowę" /><div className="call-summary-actions"><button type="button" className="button button--outline" onClick={start}>Zagraj ten scenariusz jeszcze raz</button><button type="button" className="text-button" onClick={() => navigate(`lesson/${scenario.lessonId}`)}>Przećwicz ten moment w lekcji {scenario.lessonId} <ArrowRight size={16} /></button></div></section>}
+  return <StudioPage navigate={navigate} eyebrow="Symulator pełnej rozmowy" title="Kandydat ma swój plan." description="Symulator reaguje na wybraną strategię. Ocenę konkretnej odpowiedzi możesz w każdej chwili zlecić ChatGPT." illustration={10} className="simulator-page">
+    {!active && !finished && <section className="simulator-setup">
+      <div className="candidate-picker"><span className="eyebrow">Wybierz, kto odbiera</span>{candidateScenarios.map((item) => <button key={item.id} type="button" aria-pressed={item.id === scenarioId} onClick={() => { setScenarioId(item.id); if (item.id === "five-minutes") setModeId("quick"); }}><span>{item.role}</span><strong>{item.name}</strong><small>{item.temperament} · {item.difficulty}</small></button>)}</div>
+      <div className="mode-picker"><span className="eyebrow">{scenario.id === "five-minutes" ? "Kandydat ma tylko pięć minut, więc szanujesz jego czas." : "Ile masz czasu?"}</span>{callModes.map((item) => <button key={item.id} type="button" aria-pressed={item.id === modeId} disabled={scenario.id === "five-minutes" && item.id !== "quick"} onClick={() => setModeId(item.id)}><strong>{item.minutes} min</strong><span>{item.title}</span><small>{item.stepIds.length} {item.stepIds.length === 4 ? "etapy" : "etapów"}</small></button>)}</div>
+      <button type="button" className="button button--violet simulator-start" onClick={start}><PhoneCall size={19} /> Odbierz telefon</button>
+    </section>}
+    {active && <section className="live-call">
+      <header className="live-call-bar"><span><span className="live-dot" /> Rozmowa trwa · {scenario.role}</span><strong>{step + 1} / {mode.stepIds.length}</strong><PracticeTimer seconds={mode.minutes * 60} lessonKey={`call-${scenario.id}-${mode.id}`} title="Czas rozmowy" compact autoStart /></header>
+      <div className="call-progress-track"><i style={{ width: `${((step + (challenge ? .5 : 0)) / mode.stepIds.length) * 100}%` }} /></div>
+      <div className="call-history" aria-live="polite">{transcript.map((turn, index) => <article key={`${index}-${turn.speaker}`} className={`call-turn call-turn--${turn.speaker}`}><span>{turn.speaker === "candidate" ? "Candidate" : "You"}</span><p lang="en">{turn.text}</p>{turn.speaker === "candidate" && index === transcript.length - 1 && <ListenButton phrase={turn.text} label="Odsłuchaj pytanie" />}</article>)}</div>
+      <div className="call-response">
+        <div className="call-current-intent"><span className="eyebrow">{challenge ? "Niespodziewany zwrot" : step === 0 ? "Pierwsza reakcja na pytanie kandydata" : `Etap ${step + 1}: ${currentStep?.title || "Rozmowa"}`}</span><p>{challenge ? "Kandydat stawia warunek. Odpowiedz spokojnie, nie wymyślaj potwierdzeń." : step === 0 ? "Najpierw odpowiedz na to, co kandydat właśnie powiedział. Dopiero potem spokojnie ustaw rozmowę." : currentStep?.goal}</p></div>
+        <label htmlFor="simulation-answer">Twoja odpowiedź po angielsku</label>
+        <textarea id="simulation-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="Wpisz odpowiedź albo użyj dyktowania poniżej…" />
+        <VoicePractice value={answer} lessonKey={`simulation-${scenario.id}-${step}-${challenge}`} onTranscript={setAnswer} />
+        <fieldset className="strategy-picker"><legend>W jakim kierunku prowadzisz rozmowę?</legend>{[["understand", "Uznaj obawę i doprecyzuj"], ["continue", "Odpowiedz i przejdź dalej"], ["avoid", "Pomiń ten temat"]].map(([id, label]) => <label key={id}><input type="radio" name="call-strategy" value={id} checked={intention === id} onChange={() => setIntention(id)} /><span>{label}</span></label>)}</fieldset>
+        <button type="button" className="button button--outline" disabled={!answer.trim() || containsPersonalContact(answer)} onClick={reply}>Wstaw do rozmowy <ArrowRight size={17} /></button>
+        <PromptHandoff prompt={currentTurnPrompt} label="Oceń tę odpowiedź w ChatGPT" compact disabled={!answer.trim() || containsPersonalContact(answer)} />
+      </div>
+      {coach && <div className="field-coach"><Sparkle size={19} /><div><p>{feedback}</p><strong lang="en">{coach}</strong><div className="field-model-actions"><ListenButton phrase={coach} /><SavePhraseButton phrase={coach} progress={progress} updateProgress={updateProgress} compact /></div>{lastTurnReview && <PromptHandoff prompt={lastTurnReview.prompt} label="Oceń poprzednią odpowiedź w ChatGPT" compact />}</div></div>}
+    </section>}
+    {finished && <section className="call-summary"><CheckCircle size={38} weight="fill" /><span className="eyebrow">Rozmowa zakończona</span><h2>Przeszłaś przez {transcript.filter((turn) => turn.speaker === "recruiter").length} prawdziwych odpowiedzi.</h2><p>Możesz ocenić ostatnią odpowiedź osobno albo przekazać ChatGPT pełną rozmowę razem z twoimi dokładnymi wypowiedziami.</p><details className="transcript-review"><summary>Pokaż pełny zapis rozmowy</summary>{transcript.map((turn, index) => <p key={`${index}-${turn.speaker}`}><strong>{turn.speaker === "candidate" ? "Candidate" : "You"}:</strong> <span lang="en">{turn.text}</span></p>)}</details>{lastTurnReview && <PromptHandoff prompt={lastTurnReview.prompt} label="Oceń ostatnią odpowiedź w ChatGPT" compact />}<PromptHandoff prompt={prompt} label="Niech ChatGPT oceni całą rozmowę" /><div className="call-summary-actions"><button type="button" className="button button--outline" onClick={start}>Zagraj ten scenariusz jeszcze raz</button><button type="button" className="text-button" onClick={() => navigate(`lesson/${scenario.lessonId}`)}>Przećwicz ten moment w lekcji {scenario.lessonId} <ArrowRight size={16} /></button></div></section>}
   </StudioPage>;
 }
 
@@ -186,6 +228,11 @@ function ReflexPractice({ progress, updateProgress, navigate }) {
   const startedAt = useRef(0);
   const playbackGeneration = useRef(0);
   const situation = difficultSituations[index % difficultSituations.length];
+  const reviewPrompt = answer.trim() ? makePracticePrompt({
+    title: situation.title, context: `${situation.category}; szybka reakcja po ${seconds} sekundach`,
+    candidate: situation.candidate, answer, model: situation.model,
+    goal: "odpowiedzieć spokojnie i bez składania niepotwierdzonych obietnic", ...favoritesAndDifficult(progress),
+  }) : "";
 
   useEffect(() => () => {
     playbackGeneration.current += 1;
@@ -214,7 +261,7 @@ function ReflexPractice({ progress, updateProgress, navigate }) {
   function next() { playbackGeneration.current += 1; window.speechSynthesis?.cancel(); setIndex((current) => current + 1); setAnswer(""); setRevealed(false); setRunning(false); setListening(false); setRemaining(seconds); }
   function check() { if (!answer.trim()) return; setRunning(false); setRevealed(true); setAttempts((current) => current + 1); logPractice(updateProgress, "reflex", situation.id); }
 
-  return <StudioPage navigate={navigate} eyebrow="Trening odruchu" title="Nie czekaj na idealne zdanie." description="Zegar rusza dopiero po wysłuchaniu kandydata. Mierzy rozpoczęcie odpowiedzi, nie ocenia akcentu ani nie przerywa myśli." illustration={1} className="reflex-page"><div className="reflex-controls"><span>Masz na start:</span>{[3, 5, 8].map((time) => <button key={time} type="button" aria-pressed={seconds === time} onClick={() => { setSeconds(time); setRemaining(time); setRunning(false); }}>{time} sekund</button>)}<small>{attempts} odpowiedzi w tej sesji</small></div><section className="reflex-stage"><span className="eyebrow">Kandydat · {situation.category}</span><p className="reflex-question" lang="en">{situation.candidate}</p><div className={`reflex-clock ${remaining === 0 ? "reflex-clock--open" : ""}`}><Timer size={27} /><output aria-live="polite">{remaining}</output><span>{remaining === 0 ? "Nadal możesz spokojnie odpowiedzieć." : listening ? "Najpierw spokojnie wysłuchaj kandydata." : running ? "Zacznij mówić." : "Włącz, kiedy chcesz zacząć."}</span></div><button type="button" className="button button--violet" onClick={begin}><Play size={18} weight="fill" /> {listening ? "Słuchasz pytania…" : running ? "Zacznij od nowa" : "Usłysz pytanie i zacznij"}</button><label htmlFor="reflex-answer">Twoja odpowiedź</label><textarea id="reflex-answer" value={answer} onChange={(event) => { setAnswer(event.target.value); if (running) setRunning(false); }} placeholder="Powiedz po swojemu, potem zapisz jedną naturalną wersję…" /><VoicePractice lessonKey={`reflex-${situation.id}`} onTranscript={(text) => { setAnswer(text); setRunning(false); }} /><div className="reflex-actions"><button type="button" className="button button--outline" disabled={!answer.trim() || revealed} onClick={check}>Pokaż spokojny wariant</button><button type="button" className="text-button" onClick={next}>Następna sytuacja <ArrowRight size={16} /></button></div>{revealed && <ModelAnswer phrase={situation.model} followUp={situation.next} progress={progress} updateProgress={updateProgress} prompt={makePracticePrompt({ title: situation.title, context: situation.category, candidate: situation.candidate, answer, model: situation.model, ...favoritesAndDifficult(progress) })} />}</section></StudioPage>;
+  return <StudioPage navigate={navigate} eyebrow="Trening odruchu" title="Nie czekaj na idealne zdanie." description="Zegar rusza dopiero po wysłuchaniu kandydata. Mierzy rozpoczęcie odpowiedzi, nie ocenia akcentu ani nie przerywa myśli." illustration={1} className="reflex-page"><div className="reflex-controls"><span>Masz na start:</span>{[3, 5, 8].map((time) => <button key={time} type="button" aria-pressed={seconds === time} onClick={() => { setSeconds(time); setRemaining(time); setRunning(false); }}>{time} sekund</button>)}<small>{attempts} odpowiedzi w tej sesji</small></div><section className="reflex-stage"><span className="eyebrow">Kandydat · {situation.category}</span><p className="reflex-question" lang="en">{situation.candidate}</p><div className={`reflex-clock ${remaining === 0 ? "reflex-clock--open" : ""}`}><Timer size={27} /><output aria-live="polite">{remaining}</output><span>{remaining === 0 ? "Nadal możesz spokojnie odpowiedzieć." : listening ? "Najpierw spokojnie wysłuchaj kandydata." : running ? "Zacznij mówić." : "Włącz, kiedy chcesz zacząć."}</span></div><button type="button" className="button button--violet" onClick={begin}><Play size={18} weight="fill" /> {listening ? "Słuchasz pytania…" : running ? "Zacznij od nowa" : "Usłysz pytanie i zacznij"}</button><label htmlFor="reflex-answer">Twoja odpowiedź</label><textarea id="reflex-answer" value={answer} onChange={(event) => { setAnswer(event.target.value); if (running) setRunning(false); }} placeholder="Powiedz po swojemu, potem zapisz jedną naturalną wersję…" /><VoicePractice value={answer} lessonKey={`reflex-${situation.id}`} onTranscript={(text) => { setAnswer(text); setRunning(false); }} /><div className="reflex-actions"><button type="button" className="button button--outline" disabled={!answer.trim() || revealed} onClick={check}>Pokaż spokojny wariant</button><button type="button" className="text-button" onClick={next}>Następna sytuacja <ArrowRight size={16} /></button></div><PromptHandoff prompt={reviewPrompt} label="Oceń tę odpowiedź w ChatGPT" compact disabled={!answer.trim()} />{revealed && <ModelAnswer phrase={situation.model} followUp={situation.next} progress={progress} updateProgress={updateProgress} />}</section></StudioPage>;
 }
 
 function ListeningPractice({ progress, updateProgress, navigate }) {
@@ -224,16 +271,21 @@ function ListeningPractice({ progress, updateProgress, navigate }) {
   const [answer, setAnswer] = useState("");
   const [revealed, setRevealed] = useState(false);
   const scenario = listeningScenarios.find((item) => item.id === selected) || listeningScenarios[0];
+  const reviewPrompt = answer.trim() ? makePracticePrompt({
+    title: scenario.title, context: scenario.question, candidate: scenario.line, answer,
+    model: scenario.reply, goal: "zrozumieć kluczowy szczegół w wypowiedzi kandydata i odpowiedzieć na jego prawdziwy sens",
+    ...favoritesAndDifficult(progress),
+  }) : "";
 
   function choose(id) { setSelected(id); setPlayed(false); setTranscriptVisible(false); setAnswer(""); setRevealed(false); }
   function play(rate = .88) { const ok = speakPhrase(scenario.line, rate); setPlayed(true); if (!ok) setTranscriptVisible(true); }
   function compare() { if (!answer.trim() || revealed) return; setRevealed(true); logPractice(updateProgress, "listening", scenario.id); }
 
-  return <StudioPage navigate={navigate} eyebrow="Najpierw usłysz, potem zobacz" title="Kandydat mówi pierwszy." description="Ukryty zapis zmusza do usłyszenia sensu. Możesz zwolnić tempo albo odsłonić tekst, jeśli urządzenie nie ma dostępnego głosu." illustration={7} className="listening-page"><div className="topic-tabs" role="group" aria-label="Wybierz wypowiedź kandydata">{listeningScenarios.map((item) => <button key={item.id} type="button" aria-pressed={selected === item.id} onClick={() => choose(item.id)}>{item.title}</button>)}</div><section className="listening-stage"><span className="eyebrow">Usłysz odpowiedź kandydata</span><div className="sound-orb" aria-hidden="true"><Waveform size={53} /></div><div className="listening-actions"><button type="button" className="button button--violet" onClick={() => play(.92)}><Headphones size={19} /> {played ? "Odtwórz jeszcze raz" : "Odtwórz bez podglądu"}</button><button type="button" className="button button--outline" onClick={() => play(.7)}>Wolniej</button></div>{played && <><p className="listening-question">{scenario.question}</p><button type="button" className="text-button transcript-toggle" aria-expanded={transcriptVisible} onClick={() => setTranscriptVisible((value) => !value)}>{transcriptVisible ? "Ukryj wypowiedź" : "Pokaż transkrypcję"}</button>{transcriptVisible && <blockquote lang="en">{scenario.line}</blockquote>}<label htmlFor="listening-answer">Jak odpowiesz kandydatowi po angielsku?</label><textarea id="listening-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="Najpierw nazwij sens wypowiedzi, potem odpowiedz…" /><VoicePractice lessonKey={`listening-${scenario.id}`} onTranscript={setAnswer} /><button type="button" className="button button--outline" disabled={!answer.trim() || revealed} onClick={compare}>Sprawdź, co było najważniejsze</button>{revealed && <><div className="listening-insight"><Sparkle size={19} /><p>{scenario.insight}</p></div><ModelAnswer phrase={scenario.reply} progress={progress} updateProgress={updateProgress} prompt={makePracticePrompt({ title: scenario.title, context: scenario.question, candidate: scenario.line, answer, model: scenario.reply, ...favoritesAndDifficult(progress) })} /></>}</>}</section></StudioPage>;
+  return <StudioPage navigate={navigate} eyebrow="Najpierw usłysz, potem zobacz" title="Kandydat mówi pierwszy." description="Ukryty zapis zmusza do usłyszenia sensu. Możesz zwolnić tempo albo odsłonić tekst, jeśli urządzenie nie ma dostępnego głosu." illustration={7} className="listening-page"><div className="topic-tabs" role="group" aria-label="Wybierz wypowiedź kandydata">{listeningScenarios.map((item) => <button key={item.id} type="button" aria-pressed={selected === item.id} onClick={() => choose(item.id)}>{item.title}</button>)}</div><section className="listening-stage"><span className="eyebrow">Usłysz odpowiedź kandydata</span><div className="sound-orb" aria-hidden="true"><Waveform size={53} /></div><div className="listening-actions"><button type="button" className="button button--violet" onClick={() => play(.92)}><Headphones size={19} /> {played ? "Odtwórz jeszcze raz" : "Odtwórz bez podglądu"}</button><button type="button" className="button button--outline" onClick={() => play(.7)}>Wolniej</button></div>{played && <><p className="listening-question">{scenario.question}</p><button type="button" className="text-button transcript-toggle" aria-expanded={transcriptVisible} onClick={() => setTranscriptVisible((value) => !value)}>{transcriptVisible ? "Ukryj wypowiedź" : "Pokaż transkrypcję"}</button>{transcriptVisible && <blockquote lang="en">{scenario.line}</blockquote>}<label htmlFor="listening-answer">Jak odpowiesz kandydatowi po angielsku?</label><textarea id="listening-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="Najpierw nazwij sens wypowiedzi, potem odpowiedz…" /><VoicePractice value={answer} lessonKey={`listening-${scenario.id}`} onTranscript={setAnswer} /><button type="button" className="button button--outline" disabled={!answer.trim() || revealed} onClick={compare}>Sprawdź, co było najważniejsze</button><PromptHandoff prompt={reviewPrompt} label="Oceń tę odpowiedź w ChatGPT" compact disabled={!answer.trim()} />{revealed && <><div className="listening-insight"><Sparkle size={19} /><p>{scenario.insight}</p></div><ModelAnswer phrase={scenario.reply} progress={progress} updateProgress={updateProgress} /></>}</>}</section></StudioPage>;
 }
 
-function ModelAnswer({ phrase, followUp, followUpLabel = "Candidate odpowiada", progress, updateProgress, prompt }) {
-  return <section className="model-answer" aria-label="Naturalny wariant odpowiedzi"><span className="eyebrow">Jedna naturalna odpowiedź</span><p lang="en">{phrase}</p><div className="field-model-actions"><ListenButton phrase={phrase} /><SavePhraseButton phrase={phrase} progress={progress} updateProgress={updateProgress} /></div>{followUp && <div className="candidate-follow-up"><span>{followUpLabel}</span><p lang="en">{followUp}</p></div>}{prompt && <PromptHandoff prompt={prompt} compact />}</section>;
+function ModelAnswer({ phrase, followUp, followUpLabel = "Candidate odpowiada", progress, updateProgress }) {
+  return <section className="model-answer" aria-label="Naturalny wariant odpowiedzi"><span className="eyebrow">Jedna naturalna odpowiedź</span><p lang="en">{phrase}</p><div className="field-model-actions"><ListenButton phrase={phrase} /><SavePhraseButton phrase={phrase} progress={progress} updateProgress={updateProgress} /></div>{followUp && <div className="candidate-follow-up"><span>{followUpLabel}</span><p lang="en">{followUp}</p></div>}</section>;
 }
 
 function QuickBrief({ progress, updateProgress, navigate: baseNavigate, initialRole }) {
@@ -264,9 +316,14 @@ function SituationLab({ progress, updateProgress, navigate }) {
   const [answer, setAnswer] = useState("");
   const [revealed, setRevealed] = useState(false);
   const scenario = difficultSituations.find((item) => item.id === caseId) || difficultSituations[0];
+  const reviewPrompt = answer.trim() ? makePracticePrompt({
+    title: scenario.title, context: scenario.category, candidate: scenario.candidate,
+    answer, model: scenario.model, goal: "rozpoznać potrzebę kandydata i odpowiedzieć naturalnie",
+    ...favoritesAndDifficult(progress),
+  }) : "";
   function select(id) { setCaseId(id); setAnswer(""); setRevealed(false); }
   function reveal() { if (!answer.trim() || revealed) return; setRevealed(true); logPractice(updateProgress, "situation", scenario.id); }
-  return <StudioPage navigate={navigate} eyebrow="Gdy kandydat stawia warunek" title="Nie musisz mieć idealnej odpowiedzi." description="Najpierw zauważ, czego kandydat rzeczywiście potrzebuje. Dopiero potem porównaj swoją odpowiedź z naturalnym wariantem." illustration={9} className="situations-page"><div className="topic-tabs" role="group" aria-label="Wybierz trudną sytuację">{difficultSituations.map((item) => <button key={item.id} type="button" aria-pressed={caseId === item.id} onClick={() => select(item.id)}>{item.title}</button>)}</div><section className="field-exercise"><span className="eyebrow">{scenario.category}</span><h2>{scenario.title}</h2><div className="candidate-statement"><span>Candidate</span><p lang="en">{scenario.candidate}</p><ListenButton phrase={scenario.candidate} /></div><label htmlFor="situation-answer">Co odpowiesz?</label><textarea id="situation-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="Odpowiedz swoim naturalnym angielskim…" /><VoicePractice lessonKey={`situation-${scenario.id}`} onTranscript={setAnswer} /><button type="button" className="button button--violet" disabled={!answer.trim() || revealed} onClick={reveal}>Wstaw swoją odpowiedź <ArrowRight size={16} /></button>{revealed && <><ModelAnswer phrase={scenario.model} followUp={scenario.next} progress={progress} updateProgress={updateProgress} prompt={makePracticePrompt({ title: scenario.title, context: scenario.category, candidate: scenario.candidate, answer, model: scenario.model, ...favoritesAndDifficult(progress) })} /><button type="button" className="text-button field-related-lesson" onClick={() => navigate(`lesson/${scenario.lessonId}`)}>Przećwicz dalej w lekcji {scenario.lessonId} <ArrowRight size={16} /></button></>}</section></StudioPage>;
+  return <StudioPage navigate={navigate} eyebrow="Gdy kandydat stawia warunek" title="Nie musisz mieć idealnej odpowiedzi." description="Najpierw zauważ, czego kandydat rzeczywiście potrzebuje. Dopiero potem porównaj swoją odpowiedź z naturalnym wariantem." illustration={9} className="situations-page"><div className="topic-tabs" role="group" aria-label="Wybierz trudną sytuację">{difficultSituations.map((item) => <button key={item.id} type="button" aria-pressed={caseId === item.id} onClick={() => select(item.id)}>{item.title}</button>)}</div><section className="field-exercise"><span className="eyebrow">{scenario.category}</span><h2>{scenario.title}</h2><div className="candidate-statement"><span>Candidate</span><p lang="en">{scenario.candidate}</p><ListenButton phrase={scenario.candidate} /></div><label htmlFor="situation-answer">Co odpowiesz?</label><textarea id="situation-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="Odpowiedz swoim naturalnym angielskim…" /><VoicePractice value={answer} lessonKey={`situation-${scenario.id}`} onTranscript={setAnswer} /><button type="button" className="button button--outline" disabled={!answer.trim() || revealed} onClick={reveal}>Wstaw swoją odpowiedź <ArrowRight size={16} /></button><PromptHandoff prompt={reviewPrompt} label="Oceń tę odpowiedź w ChatGPT" compact disabled={!answer.trim()} />{revealed && <><ModelAnswer phrase={scenario.model} followUp={scenario.next} progress={progress} updateProgress={updateProgress} /><button type="button" className="text-button field-related-lesson" onClick={() => navigate(`lesson/${scenario.lessonId}`)}>Przećwicz dalej w lekcji {scenario.lessonId} <ArrowRight size={16} /></button></>}</section></StudioPage>;
 }
 
 function NaturalEnglish({ progress, updateProgress, navigate }) {
@@ -284,9 +341,15 @@ function TeamPractice({ progress, updateProgress, navigate }) {
   const [answer, setAnswer] = useState("");
   const [shown, setShown] = useState(false);
   const scenario = stakeholderScenarios.find((item) => item.id === selected) || stakeholderScenarios[0];
+  const reviewPrompt = answer.trim() ? makePracticePrompt({
+    title: scenario.title, context: scenario.context, answer,
+    model: `${scenario.phrase} ${scenario.followUp}`,
+    goal: "jasno i profesjonalnie porozumieć się z klientem lub hiring managerem",
+    ...favoritesAndDifficult(progress),
+  }) : "";
   function choose(id) { setSelected(id); setAnswer(""); setShown(false); }
   function reveal() { if (!answer.trim() || shown) return; setShown(true); logPractice(updateProgress, "team", scenario.id); }
-  return <StudioPage navigate={navigate} eyebrow="Po drugiej stronie jest też zespół" title="Powiedz to hiring managerowi." description="Pytasz o wymagania, bronisz dobrego kandydata i domykasz feedback. Profesjonalnie, ale bez języka z korporacyjnych prezentacji." illustration={5} className="team-page"><div className="topic-tabs" role="group" aria-label="Wybierz sytuację z zespołem">{stakeholderScenarios.map((item) => <button key={item.id} type="button" aria-pressed={selected === item.id} onClick={() => choose(item.id)}>{item.title}</button>)}</div><section className="field-exercise"><span className="eyebrow">Sytuacja</span><h2>{scenario.title}</h2><p>{scenario.context}</p><label htmlFor="team-answer">Co powiesz klientowi lub hiring managerowi?</label><textarea id="team-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="Powiedz to po swojemu…" /><VoicePractice lessonKey={`team-${scenario.id}`} onTranscript={setAnswer} /><button type="button" className="button button--violet" disabled={!answer.trim()} onClick={reveal}>Porównaj odpowiedź <ArrowRight size={17} /></button>{shown && <ModelAnswer phrase={scenario.phrase} followUp={scenario.followUp} followUpLabel="Ty dopowiadasz" progress={progress} updateProgress={updateProgress} prompt={makePracticePrompt({ title: scenario.title, context: scenario.context, answer, model: `${scenario.phrase} ${scenario.followUp}`, ...favoritesAndDifficult(progress) })} />}</section></StudioPage>;
+  return <StudioPage navigate={navigate} eyebrow="Po drugiej stronie jest też zespół" title="Powiedz to hiring managerowi." description="Pytasz o wymagania, bronisz dobrego kandydata i domykasz feedback. Profesjonalnie, ale bez języka z korporacyjnych prezentacji." illustration={5} className="team-page"><div className="topic-tabs" role="group" aria-label="Wybierz sytuację z zespołem">{stakeholderScenarios.map((item) => <button key={item.id} type="button" aria-pressed={selected === item.id} onClick={() => choose(item.id)}>{item.title}</button>)}</div><section className="field-exercise"><span className="eyebrow">Sytuacja</span><h2>{scenario.title}</h2><p>{scenario.context}</p><label htmlFor="team-answer">Co powiesz klientowi lub hiring managerowi?</label><textarea id="team-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="Powiedz to po swojemu…" /><VoicePractice value={answer} lessonKey={`team-${scenario.id}`} onTranscript={setAnswer} /><button type="button" className="button button--outline" disabled={!answer.trim()} onClick={reveal}>Porównaj odpowiedź <ArrowRight size={17} /></button><PromptHandoff prompt={reviewPrompt} label="Oceń tę odpowiedź w ChatGPT" compact disabled={!answer.trim()} />{shown && <ModelAnswer phrase={scenario.phrase} followUp={scenario.followUp} followUpLabel="Ty dopowiadasz" progress={progress} updateProgress={updateProgress} />}</section></StudioPage>;
 }
 
 function WritingPractice({ progress, updateProgress, navigate }) {
@@ -294,10 +357,15 @@ function WritingPractice({ progress, updateProgress, navigate }) {
   const [draft, setDraft] = useState("");
   const [shown, setShown] = useState(false);
   const scenario = writingScenarios.find((item) => item.id === selected) || writingScenarios[0];
+  const reviewPrompt = draft.trim() ? makePracticePrompt({
+    title: scenario.title, context: scenario.brief, answer: draft, model: scenario.model,
+    goal: "napisać krótką, naturalną wiadomość z jasnym kolejnym krokiem",
+    kind: "written recruiter message", ...favoritesAndDifficult(progress),
+  }) : "";
   function choose(id) { setSelected(id); setDraft(""); setShown(false); }
   function compare() { if (!draft.trim() || shown) return; setShown(true); logPractice(updateProgress, "message", scenario.id); }
   const words = draft.trim() ? draft.trim().split(/\s+/).length : 0;
-  return <StudioPage navigate={navigate} eyebrow="Mail, LinkedIn i krótka wiadomość" title="Pisz tak, jak naprawdę pracujesz." description="Najpierw ułóż własną wiadomość. Potem sprawdź, czy jest konkretna, naturalna i prowadzi do jasnego kolejnego kroku." illustration={8} className="writing-page"><div className="topic-tabs" role="group" aria-label="Wybierz rodzaj wiadomości">{writingScenarios.map((item) => <button key={item.id} type="button" aria-pressed={selected === item.id} onClick={() => choose(item.id)}>{item.title}</button>)}</div><section className="writing-desk"><header><span className="eyebrow">Brief wiadomości</span><h2>{scenario.title}</h2><p>{scenario.brief}</p></header><label htmlFor="writing-draft">Twoja wiadomość po angielsku</label><textarea id="writing-draft" rows={6} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Hi, …" /><div className="writing-meter"><span>{words} {words === 1 ? "słowo" : words >= 2 && words <= 4 ? "słowa" : "słów"}</span><span>Krótko, naturalnie, z jasnym kolejnym krokiem.</span></div><button type="button" className="button button--violet" disabled={!draft.trim() || shown} onClick={compare}>Porównaj z naturalną wersją <ArrowRight size={17} /></button>{shown && <><ModelAnswer phrase={scenario.model} progress={progress} updateProgress={updateProgress} prompt={makePracticePrompt({ title: scenario.title, context: scenario.brief, answer: draft, model: scenario.model, kind: "written recruiter message", ...favoritesAndDifficult(progress) })} /><button type="button" className="text-button field-related-lesson" onClick={() => navigate(`lesson/${scenario.lessonId}`)}>Otwórz powiązaną lekcję {scenario.lessonId} <ArrowRight size={16} /></button></>}</section></StudioPage>;
+  return <StudioPage navigate={navigate} eyebrow="Mail, LinkedIn i krótka wiadomość" title="Pisz tak, jak naprawdę pracujesz." description="Najpierw ułóż własną wiadomość. Potem sprawdź, czy jest konkretna, naturalna i prowadzi do jasnego kolejnego kroku." illustration={8} className="writing-page"><div className="topic-tabs" role="group" aria-label="Wybierz rodzaj wiadomości">{writingScenarios.map((item) => <button key={item.id} type="button" aria-pressed={selected === item.id} onClick={() => choose(item.id)}>{item.title}</button>)}</div><section className="writing-desk"><header><span className="eyebrow">Brief wiadomości</span><h2>{scenario.title}</h2><p>{scenario.brief}</p></header><label htmlFor="writing-draft">Twoja wiadomość po angielsku</label><textarea id="writing-draft" rows={6} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Hi, …" /><div className="writing-meter"><span>{words} {words === 1 ? "słowo" : words >= 2 && words <= 4 ? "słowa" : "słów"}</span><span>Krótko, naturalnie, z jasnym kolejnym krokiem.</span></div><button type="button" className="button button--outline" disabled={!draft.trim() || shown} onClick={compare}>Porównaj z naturalną wersją <ArrowRight size={17} /></button><PromptHandoff prompt={reviewPrompt} label="Oceń tę wiadomość w ChatGPT" compact disabled={!draft.trim()} />{shown && <><ModelAnswer phrase={scenario.model} progress={progress} updateProgress={updateProgress} /><button type="button" className="text-button field-related-lesson" onClick={() => navigate(`lesson/${scenario.lessonId}`)}>Otwórz powiązaną lekcję {scenario.lessonId} <ArrowRight size={16} /></button></>}</section></StudioPage>;
 }
 
 function AfterCallJournal({ progress, updateProgress, navigate }) {
@@ -310,7 +378,7 @@ function AfterCallJournal({ progress, updateProgress, navigate }) {
   function rescue() {
     if (saved) return;
     const phrase = ownPhrase.trim() || scenario.model;
-    if (hasPersonalDetails(phrase)) {
+    if (containsPersonalContact(phrase)) {
       setPrivacyError("Wpisz wyłącznie uniwersalną frazę. Usuń adres e-mail, numer telefonu i inne dane osoby.");
       return;
     }
@@ -334,7 +402,7 @@ function AfterCallJournal({ progress, updateProgress, navigate }) {
       <p className="journal-input-warning">Wpisz tylko uniwersalne zdanie, bez imion, nazw firm, e-maili i numerów.</p>
       {privacyError && <p className="journal-error" role="alert"><WarningCircle size={17} /> {privacyError}</p>}
       <button type="button" className="button button--violet" disabled={saved} onClick={rescue}>{saved ? <Check size={18} /> : <Heart size={18} />} {saved ? "Fraza dodana do twoich powtórek" : "Zabierz to zdanie do kolejnej rozmowy"}</button>
-      <PromptHandoff prompt={prompt} label="Przećwicz ten moment z ChatGPT" compact disabled={hasPersonalDetails(phrase)} />
+      <PromptHandoff prompt={prompt} label="Przećwicz ten moment z ChatGPT" compact disabled={containsPersonalContact(phrase)} />
       <button type="button" className="text-button journal-lesson" onClick={() => navigate(`lesson/${scenario.lessonId}`)}>Otwórz powiązaną lekcję {scenario.lessonId} <ArrowRight size={16} /></button>
       <p className="field-privacy"><ShieldCheck size={17} /> Zapisujemy wyłącznie kategorię i ćwiczoną frazę, nie szczegóły kandydata ani klienta.</p>
     </section>

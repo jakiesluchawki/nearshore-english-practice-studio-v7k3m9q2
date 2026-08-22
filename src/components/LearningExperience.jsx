@@ -11,12 +11,19 @@ import {
   ratePhraseProgress, scheduleReview, withPracticeDay,
 } from "../data/reviews.js";
 import { matchSavedPhrases, screeningScriptText, screeningSteps } from "../data/screening.js";
+import {
+  createMicrophoneCoordinator, getMicrophoneErrorMessage,
+  getRecordedBlobMimeType, getSpeechRecognitionErrorMessage, getVoiceCapabilities,
+  mergeSpeechTranscript, pickSupportedAudioMimeType,
+} from "../data/voice.js";
 
 const reviewOptions = [
   ["again", "Jeszcze raz", "jutro"],
   ["hard", "Trudne", "za 3 dni"],
   ["good", "Mam to", "za 7 dni"],
 ];
+
+const microphoneCoordinator = createMicrophoneCoordinator();
 
 export function speakPhrase(phrase, rate = 0.88, onEnd) {
   if (!("speechSynthesis" in window)) return false;
@@ -86,82 +93,166 @@ export function PracticeTimer({ seconds, lessonKey = "practice", title = "Twój 
   </div>;
 }
 
-export function VoicePractice({ onTranscript, lessonKey = "practice" }) {
+export function VoicePractice({ onTranscript, value = "", lessonKey = "practice" }) {
   const recognitionRef = useRef(null);
   const recorderRef = useRef(null);
   const streamRef = useRef(null);
   const audioUrlRef = useRef("");
   const generationRef = useRef(0);
   const pendingRef = useRef(false);
+  const ownerRef = useRef(null);
+  const heardSpeechRef = useRef(false);
+  const recognitionFailedRef = useRef(false);
+  const recordingFailedRef = useRef(false);
+  const stoppedByUserRef = useRef(false);
+  const previousSpeechRef = useRef("");
+  const latestValueRef = useRef(value);
+  latestValueRef.current = value;
+  if (!ownerRef.current) ownerRef.current = Symbol("voice-practice");
   const [recording, setRecording] = useState(false);
   const [recognizing, setRecognizing] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [audioUrl, setAudioUrl] = useState("");
-  const [message, setMessage] = useState("");
-  const Recognition = typeof window === "undefined" ? null : window.SpeechRecognition || window.webkitSpeechRecognition;
-  const supportsRecording = typeof window !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
+  const [message, setMessage] = useState(null);
+  const browser = typeof window === "undefined" ? null : window;
+  const browserNavigator = typeof navigator === "undefined" ? browser?.navigator : navigator;
+  const capabilities = getVoiceCapabilities(browser, browserNavigator);
+  const [online, setOnline] = useState(capabilities.online);
+  const Recognition = capabilities.recognition;
+  const supportsRecording = capabilities.recording;
+
+  function stopCapture() {
+    try { recognitionRef.current?.abort(); } catch { /* The recognizer may already have stopped. */ }
+    recognitionRef.current = null;
+    const recorder = recorderRef.current;
+    if (recorder?.state === "recording") {
+      try { recorder.stop(); } catch { /* A disconnected recorder is already finished. */ }
+    }
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }
+
+  function claimMicrophone(generation) {
+    microphoneCoordinator.claim(ownerRef.current, () => {
+      if (generationRef.current !== generation) return;
+      generationRef.current += 1;
+      pendingRef.current = false;
+      stopCapture();
+      setRecording(false);
+      setRecognizing(false);
+      setRequesting(false);
+      setMessage({ tone: "info", text: "Mikrofon został przełączony do drugiego ćwiczenia." });
+    });
+  }
 
   useEffect(() => {
     generationRef.current += 1;
     setAudioUrl("");
-    setMessage("");
+    setMessage(null);
     setRecording(false);
     setRecognizing(false);
     setRequesting(false);
     return () => {
       generationRef.current += 1;
       pendingRef.current = false;
-      recognitionRef.current?.abort();
-      recorderRef.current?.state === "recording" && recorderRef.current.stop();
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
+      microphoneCoordinator.release(ownerRef.current);
+      stopCapture();
       if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
       audioUrlRef.current = "";
     };
   }, [lessonKey]);
 
+  useEffect(() => {
+    if (!browser?.addEventListener) return undefined;
+    const updateConnection = () => setOnline(browserNavigator?.onLine !== false);
+    browser.addEventListener("online", updateConnection);
+    browser.addEventListener("offline", updateConnection);
+    return () => {
+      browser.removeEventListener("online", updateConnection);
+      browser.removeEventListener("offline", updateConnection);
+    };
+  }, [browser, browserNavigator]);
+
   async function toggleRecording() {
     if (recording) {
-      recorderRef.current?.stop();
+      try { recorderRef.current?.stop(); }
+      catch (error) {
+        recordingFailedRef.current = true;
+        stopCapture();
+        recorderRef.current = null;
+        setRecording(false);
+        microphoneCoordinator.release(ownerRef.current);
+        setMessage({ tone: "error", text: getMicrophoneErrorMessage(error, capabilities) });
+      }
       return;
     }
     if (pendingRef.current || recognizing) return;
 
-    const generation = generationRef.current;
+    const generation = ++generationRef.current;
     let stream;
     try {
       pendingRef.current = true;
+      recordingFailedRef.current = false;
       setRequesting(true);
-      setMessage("");
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setMessage(null);
+      claimMicrophone(generation);
+      browser.speechSynthesis?.cancel();
+      stream = await browserNavigator.mediaDevices.getUserMedia({ audio: true });
       if (generationRef.current !== generation) {
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
       streamRef.current = stream;
       const chunks = [];
-      const recorder = new MediaRecorder(stream);
+      let preferredType = pickSupportedAudioMimeType(browser.MediaRecorder);
+      let recorder;
+      try {
+        recorder = preferredType
+          ? new browser.MediaRecorder(stream, { mimeType: preferredType })
+          : new browser.MediaRecorder(stream);
+      } catch (error) {
+        if (!preferredType) throw error;
+        preferredType = "";
+        recorder = new browser.MediaRecorder(stream);
+      }
       recorderRef.current = recorder;
       recorder.addEventListener("dataavailable", (event) => event.data.size && chunks.push(event.data));
+      recorder.addEventListener("error", (event) => {
+        if (generationRef.current !== generation) return;
+        recordingFailedRef.current = true;
+        stream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        setRecording(false);
+        microphoneCoordinator.release(ownerRef.current);
+        setMessage({ tone: "error", text: getMicrophoneErrorMessage(event.error || event, capabilities) });
+      });
       recorder.addEventListener("stop", () => {
         stream.getTracks().forEach((track) => track.stop());
         if (generationRef.current !== generation) return;
         streamRef.current = null;
         setRecording(false);
-        if (!chunks.length) return;
+        microphoneCoordinator.release(ownerRef.current);
+        if (recordingFailedRef.current) return;
+        if (!chunks.length) {
+          setMessage({ tone: "error", text: "Nagranie nie zawiera dźwięku. Sprawdź wybrany mikrofon i nagraj kilka sekund." });
+          return;
+        }
         if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
-        audioUrlRef.current = URL.createObjectURL(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }));
+        const type = getRecordedBlobMimeType(recorder, chunks, preferredType);
+        audioUrlRef.current = URL.createObjectURL(new Blob(chunks, type ? { type } : {}));
         setAudioUrl(audioUrlRef.current);
-        setMessage("Nagranie zostaje w tej karcie i nie jest wysyłane do aplikacji.");
+        setMessage({ tone: "success", text: "Nagranie jest gotowe do odsłuchania. Nie wpisuje tekstu i zostaje tylko w tej karcie." });
       });
-      recorder.start();
+      recorder.start(250);
       setRecording(true);
-    } catch {
+      setMessage({ tone: "info", text: "Nagrywam tylko do odsłuchu. Aby wpisać słowa do pola, użyj osobno dyktowania." });
+    } catch (error) {
       stream?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
       if (generationRef.current === generation) {
         setRecording(false);
-        setMessage("Nie udało się uzyskać dostępu do mikrofonu. Nadal możesz wpisać odpowiedź.");
+        microphoneCoordinator.release(ownerRef.current);
+        setMessage({ tone: "error", text: getMicrophoneErrorMessage(error, capabilities) });
       }
     } finally {
       if (generationRef.current === generation) {
@@ -173,35 +264,100 @@ export function VoicePractice({ onTranscript, lessonKey = "practice" }) {
 
   function toggleRecognition() {
     if (recognizing) {
-      recognitionRef.current?.stop();
+      stoppedByUserRef.current = true;
+      try { recognitionRef.current?.stop(); }
+      catch (error) {
+        setMessage({ tone: "error", text: getSpeechRecognitionErrorMessage(error, { online, brave: capabilities.brave }) });
+      }
+      setRecognizing(false);
+      microphoneCoordinator.release(ownerRef.current);
       return;
     }
     if (!Recognition || recording || pendingRef.current) return;
+    if (!online) {
+      setMessage({ tone: "error", text: getSpeechRecognitionErrorMessage("network", { online: false }) });
+      return;
+    }
 
+    const generation = ++generationRef.current;
     try {
-      setMessage("");
+      setMessage(null);
+      heardSpeechRef.current = false;
+      recognitionFailedRef.current = false;
+      stoppedByUserRef.current = false;
+      previousSpeechRef.current = "";
+      claimMicrophone(generation);
+      browser.speechSynthesis?.cancel();
       const recognition = new Recognition();
       recognitionRef.current = recognition;
       recognition.lang = "en-GB";
+      recognition.continuous = true;
       recognition.interimResults = true;
       recognition.maxAlternatives = 1;
       recognition.onresult = (event) => {
-        const text = Array.from(event.results).map((result) => result[0]?.transcript || "").join(" ").trim();
-        if (text) onTranscript?.(text);
+        if (generationRef.current !== generation) return;
+        const { text, speech } = mergeSpeechTranscript(event, latestValueRef.current, previousSpeechRef.current);
+        if (!text) return;
+        heardSpeechRef.current = true;
+        previousSpeechRef.current = speech;
+        latestValueRef.current = text;
+        onTranscript?.(text);
+        setMessage({ tone: "success", text: "Tekst trafia do pola odpowiedzi. Możesz mówić dalej albo zakończyć dyktowanie." });
       };
-      recognition.onerror = () => setMessage("Rozpoznawanie mowy jest niedostępne. Wpisz odpowiedź albo nagraj ją lokalnie.");
-      recognition.onend = () => setRecognizing(false);
-      recognition.start();
+      recognition.onerror = (event) => {
+        if (generationRef.current !== generation) return;
+        const explanation = getSpeechRecognitionErrorMessage(event, { online: browserNavigator?.onLine !== false, brave: capabilities.brave });
+        recognitionFailedRef.current = Boolean(explanation);
+        if (event.error === "aborted") stoppedByUserRef.current = true;
+        setRecognizing(false);
+        microphoneCoordinator.release(ownerRef.current);
+        if (explanation) setMessage({ tone: "error", text: explanation });
+      };
+      recognition.onend = () => {
+        if (generationRef.current !== generation) return;
+        setRecognizing(false);
+        recognitionRef.current = null;
+        microphoneCoordinator.release(ownerRef.current);
+        if (!heardSpeechRef.current && !recognitionFailedRef.current && !stoppedByUserRef.current) {
+          setMessage({ tone: "error", text: getSpeechRecognitionErrorMessage("no-speech") });
+        }
+      };
       setRecognizing(true);
-    } catch {
+      recognition.start();
+      setMessage({ tone: "info", text: "Słucham po angielsku. Rozpoznane słowa pojawią się w polu odpowiedzi." });
+    } catch (error) {
       setRecognizing(false);
-      setMessage("Przeglądarka nie pozwoliła uruchomić rozpoznawania mowy.");
+      microphoneCoordinator.release(ownerRef.current);
+      setMessage({ tone: "error", text: getSpeechRecognitionErrorMessage(error, { online, brave: capabilities.brave }) });
     }
   }
 
-  if (!supportsRecording && !Recognition) return null;
+  if (!capabilities.secure) {
+    return <div className="voice-practice voice-practice--unavailable"><p role="status">Mikrofon wymaga bezpiecznego adresu HTTPS. Otwórz kurs przez jego właściwy link albo wpisz odpowiedź.</p></div>;
+  }
 
-  return <div className="voice-practice"><div className="voice-actions">{supportsRecording && <button type="button" className={recording ? "recording" : ""} aria-pressed={recording} disabled={requesting || recognizing} onClick={toggleRecording}>{recording ? <Stop size={17} weight="fill" /> : <Microphone size={17} />}{requesting ? "Proszę o dostęp do mikrofonu…" : recording ? "Zakończ nagranie" : "Nagraj odpowiedź"}</button>}{Recognition && <button type="button" aria-pressed={recognizing} disabled={recording || requesting} onClick={toggleRecognition}><Microphone size={17} weight={recognizing ? "fill" : "regular"} />{recognizing ? "Zatrzymaj zapis" : "Mów i zamień na tekst"}</button>}</div>{audioUrl && <audio className="voice-playback" controls src={audioUrl} aria-label="Odtwórz swoje nagranie" />}{message && <p role="status">{message}</p>}{Recognition && <small>Rozpoznawanie mowy działa tylko w obsługiwanych przeglądarkach i może korzystać z usługi ich dostawcy.</small>}</div>;
+  if (!supportsRecording && !Recognition) {
+    return <div className="voice-practice voice-practice--unavailable"><p role="status">Ta przeglądarka nie udostępnia mikrofonu ani dyktowania. Wpisz odpowiedź lub użyj dyktowania systemowego.</p></div>;
+  }
+
+  return <div className="voice-practice">
+    <div className="voice-actions">
+      {Recognition && <button type="button" className={`voice-action voice-action--dictation ${recognizing ? "recording" : ""}`} aria-pressed={recognizing} disabled={recording || requesting || (!online && !recognizing)} onClick={toggleRecognition}>
+        <Microphone size={18} weight={recognizing ? "fill" : "regular"} />{recognizing ? "Zakończ dyktowanie" : "Mów i wpisz odpowiedź"}
+      </button>}
+      {supportsRecording && <button type="button" className={`voice-action voice-action--playback ${recording ? "recording" : ""}`} aria-pressed={recording} disabled={requesting || recognizing} onClick={toggleRecording}>
+        {recording ? <Stop size={17} weight="fill" /> : <Headphones size={17} />}{requesting ? "Czekam na dostęp do mikrofonu…" : recording ? "Zakończ nagranie" : "Nagraj tylko do odsłuchu"}
+      </button>}
+    </div>
+    {audioUrl && <audio className="voice-playback" controls src={audioUrl} aria-label="Odtwórz swoje nagranie" />}
+    {message && <p className={`voice-message voice-message--${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p>}
+    <small className="voice-explainer">{Recognition
+      ? online
+        ? "Dyktowanie wpisuje słowa do pola i może przekazywać głos do usługi dostawcy przeglądarki. Nagranie służy wyłącznie do odsłuchu."
+        : "Dyktowanie wymaga internetu. Nagranie do odsłuchu nadal działa bez połączenia."
+      : "Nagranie nie zamienia mowy na tekst. Do uzupełnienia pola możesz użyć systemowego dyktowania."}</small>
+    <details className="voice-help"><summary>Nie działa mikrofon albo dyktowanie?</summary><p>Zezwól stronie na mikrofon przy pasku adresu. Na Macu sprawdź również: Ustawienia systemowe → Prywatność i ochrona → Mikrofon. Jeśli Brave nie zamienia mowy na tekst, użyj dyktowania systemowego lub otwórz kurs w Chrome.</p></details>
+  </div>;
 }
 
 const commonWords = new Set(["could", "would", "should", "there", "their", "about", "which", "after", "before", "going", "today", "really", "still", "please", "quite", "through", "what", "that", "does", "good", "currently", "personally", "completely", "looking", "have", "with", "your", "this"]);
@@ -273,8 +429,8 @@ export function DailyPractice({ progress, updateProgress, navigate, onReviewAnsw
   return <main id="main" className="page page-width daily-practice-page"><header className="daily-intro"><div><span className="eyebrow">Twoje 17 minut</span><h1>Mała sesja. Dużo mniej pustki.</h1><p>Nowy język miesza się z frazami, które sama zapisałaś. Najpierw mówisz, dopiero potem porównujesz.</p></div><PracticeTimer seconds={17 * 60} lessonKey={`session-${lesson.id}`} title="Czas całej sesji" compact /></header><ol className="session-progress" aria-label="Plan codziennej sesji">{sessionStages.map((item, index) => <li key={item.id} className={index === stage ? "current" : index < stage ? "done" : ""}><button type="button" disabled={index > furthestStage} onClick={() => setStage(index)} aria-current={index === stage ? "step" : undefined}><span>{index < stage ? <Check size={16} weight="bold" /> : String(index + 1).padStart(2, "0")}</span><strong>{item.label}</strong><small>{item.minutes} min</small></button></li>)}</ol><section className="session-stage"><header><span className="eyebrow">{String(stage + 1).padStart(2, "0")} · {currentStage.minutes} min</span><h2>{currentStage.title}</h2></header>
     {stage === 0 && <><p>{queue.length ? "Każde zdanie oceniasz osobno. Ulubione i trudne wracają jako pierwsze." : "Nie masz jeszcze zaległych zdań. Zacznij od jednej frazy z dzisiejszej lekcji."}</p><div className="session-review-list">{(queue.length ? queue : [{ phrase: quiz.answer, lessonId: lesson.id, favorite: progress.myPhrases.includes(quiz.answer) }]).map((item) => <article key={item.phrase}><div><p lang="en">{item.phrase}</p><span>{item.favorite ? <><Star size={15} weight="fill" /> Twoja fraza</> : "Z dzisiejszej lekcji"}</span></div><button type="button" className="session-listen" onClick={() => speakPhrase(item.phrase)} aria-label={`Posłuchaj: ${item.phrase}`}><Headphones size={19} /></button><PhraseReviewControls phrase={item.phrase} lessonId={item.lessonId || lesson.id} progress={progress} updateProgress={updateProgress} compact /></article>)}</div></>}
     {stage === 1 && <><p className="session-context">Wyobraź sobie, że chcesz {lesson.goal}. Zacznij od zdania, które przyszłoby ci do głowy podczas prawdziwej rozmowy.</p><PracticeTimer seconds={lesson.practiceType === "message" ? 45 : 20} lessonKey={`intro-${lesson.id}`} title={lesson.practiceType === "message" ? "Czas na krótką wiadomość" : "Czas na odpowiedź na głos"} /><div className="session-phrase-pack">{lesson.phrases.slice(0, 3).map((phrase) => <button type="button" key={phrase} lang="en" onClick={() => speakPhrase(phrase)}><Headphones size={16} /> {phrase}</button>)}</div></>}
-    {stage === 2 && <><div className="translation-exercise"><span className="eyebrow">Twoja intencja po polsku</span><p>Chcesz {quiz.intention}. Jak powiesz to po angielsku?</p><textarea value={translation} onChange={(event) => setTranslation(event.target.value)} aria-label="Twoja odpowiedź po angielsku" placeholder="Najpierw powiedz, potem zapisz swoją wersję…" /><VoicePractice onTranscript={setTranslation} lessonKey={`translation-${lesson.id}`} /><button type="button" className="button button--outline" onClick={() => setTranslationVisible(true)} disabled={!translation.trim()}>Porównaj ze wzorem</button>{translationVisible && <><div className="translation-model"><span>Naturalny wariant</span><p lang="en">{quiz.answer}</p><small>Twoja odpowiedź nie musi brzmieć identycznie. Liczy się ta sama intencja i spokojny ton.</small></div>{onReviewAnswer && <button type="button" className="session-chatgpt" onClick={() => onReviewAnswer(lesson, translation)}><Sparkle size={17} /> Niech ChatGPT oceni twoją odpowiedź</button>}</>}</div><ClozeExercise lesson={lesson} answer={quiz.answer} /></>}
-    {stage === 3 && <><div className="session-dialogue"><div className="session-candidate"><span>{candidateLead ? "Candidate" : "Sytuacja"}</span>{candidateLead ? <p lang="en">{candidateLead}</p> : <p>Twoim celem jest {lesson.goal}. Zacznij rozmowę własnym zdaniem.</p>}</div><label><span>Twoja odpowiedź</span><textarea value={dialogueAnswer} onChange={(event) => setDialogueAnswer(event.target.value)} placeholder={candidateLead ? "Jak odpowiesz kandydatowi?" : "Jak zaczniesz tę część rozmowy?"} /></label><VoicePractice onTranscript={setDialogueAnswer} lessonKey={`dialogue-${lesson.id}`} /><button type="button" className="button button--violet" disabled={!dialogueAnswer.trim()} onClick={() => { setDialogueVisible(true); updateProgress((current) => withPracticeDay(current)); }}>Sprawdź naturalny wariant</button>{dialogueVisible && <><div className="translation-model"><span>Jedna z możliwych odpowiedzi</span><p lang="en">{recruiterModel}</p><small>Oceń intencję i naturalność, nie każde pojedyncze słowo.</small></div>{onReviewAnswer && <button type="button" className="session-chatgpt" onClick={() => onReviewAnswer(lesson, dialogueAnswer)}><Sparkle size={17} /> Niech ChatGPT oceni twoją odpowiedź</button>}{candidateFollowUp && <div className="session-candidate session-candidate--follow"><span>Candidate odpowiada</span><p lang="en">{candidateFollowUp}</p></div>}</>}</div></>}
+    {stage === 2 && <><div className="translation-exercise"><span className="eyebrow">Twoja intencja po polsku</span><p>Chcesz {quiz.intention}. Jak powiesz to po angielsku?</p><textarea value={translation} onChange={(event) => setTranslation(event.target.value)} aria-label="Twoja odpowiedź po angielsku" placeholder="Najpierw powiedz, potem zapisz swoją wersję…" /><VoicePractice value={translation} onTranscript={setTranslation} lessonKey={`translation-${lesson.id}`} /><div className="answer-action-row"><button type="button" className="button button--outline" onClick={() => setTranslationVisible(true)} disabled={!translation.trim()}>Porównaj ze wzorem</button>{onReviewAnswer && <button type="button" className="session-chatgpt" disabled={!translation.trim()} onClick={() => onReviewAnswer(lesson, translation, { kind: "translation", intention: quiz.intention, reference: quiz.answer })}><Sparkle size={17} /> Niech ChatGPT oceni odpowiedź</button>}</div>{translationVisible && <div className="translation-model"><span>Naturalny wariant</span><p lang="en">{quiz.answer}</p><small>Twoja odpowiedź nie musi brzmieć identycznie. Liczy się ta sama intencja i spokojny ton.</small></div>}</div><ClozeExercise lesson={lesson} answer={quiz.answer} /></>}
+    {stage === 3 && <><div className="session-dialogue"><div className="session-candidate"><span>{candidateLead ? "Candidate" : "Sytuacja"}</span>{candidateLead ? <p lang="en">{candidateLead}</p> : <p>Twoim celem jest {lesson.goal}. Zacznij rozmowę własnym zdaniem.</p>}</div><label><span>Twoja odpowiedź</span><textarea value={dialogueAnswer} onChange={(event) => setDialogueAnswer(event.target.value)} placeholder={candidateLead ? "Jak odpowiesz kandydatowi?" : "Jak zaczniesz tę część rozmowy?"} /></label><VoicePractice value={dialogueAnswer} onTranscript={setDialogueAnswer} lessonKey={`dialogue-${lesson.id}`} /><div className="answer-action-row"><button type="button" className="button button--violet" disabled={!dialogueAnswer.trim()} onClick={() => { setDialogueVisible(true); updateProgress((current) => withPracticeDay(current)); }}>Sprawdź naturalny wariant</button>{onReviewAnswer && <button type="button" className="session-chatgpt" disabled={!dialogueAnswer.trim()} onClick={() => onReviewAnswer(lesson, dialogueAnswer, { kind: "dialogue", candidate: candidateLead, reference: recruiterModel })}><Sparkle size={17} /> Niech ChatGPT oceni odpowiedź</button>}</div>{dialogueVisible && <><div className="translation-model"><span>Jedna z możliwych odpowiedzi</span><p lang="en">{recruiterModel}</p><small>Oceń intencję i naturalność, nie każde pojedyncze słowo.</small></div>{candidateFollowUp && <div className="session-candidate session-candidate--follow"><span>Candidate odpowiada</span><p lang="en">{candidateFollowUp}</p></div>}</>}</div></>}
     {stage === 4 && <><div className="session-recap"><Sparkle size={27} weight="fill" /><div><strong>Dzisiejsza fraza do zabrania</strong><p lang="en">{quiz.answer}</p></div></div><PhraseReviewControls phrase={quiz.answer} lessonId={lesson.id} progress={progress} updateProgress={updateProgress} />{finished ? <div className="session-finished" role="status"><CheckCircle size={23} weight="fill" /><div><strong>Sesja zapisana.</strong><span>Wróć jutro albo przejdź do pełnej lekcji.</span></div></div> : <button type="button" className="button button--violet" onClick={completeSession}>Zakończ i zapisz dzisiejszą sesję <Check size={18} /></button>}</>}
     <footer className="session-navigation"><button type="button" className="text-button" onClick={() => navigate(`lesson/${lesson.id}`)}>Pełna lekcja {lesson.id}</button>{stage < sessionStages.length - 1 && <button type="button" className="button button--violet" disabled={!canAdvance} onClick={advance}>Dalej: {sessionStages[stage + 1].label} <ArrowRight size={17} /></button>}</footer>
   </section></main>;

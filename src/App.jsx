@@ -9,6 +9,7 @@ import {
   ClozeExercise, DailyPractice, PersonalScreeningScript, PhraseReviewControls,
   PracticeTimer, VoicePractice, speakPhrase,
 } from "./components/LearningExperience.jsx";
+import { FieldworkStudio } from "./components/FieldworkStudio.jsx";
 import { cheatSheets } from "./data/cheatsheets.js";
 import { answerReviewPrompt, getLesson, lessonPrompt, lessons, modules } from "./data/curriculum.js";
 import { getLessonDialogue } from "./data/dialogues.js";
@@ -21,16 +22,17 @@ import {
 import { screeningScriptText, screeningSteps } from "./data/screening.js";
 
 const APP_PASSWORD_HASH = "33f158fd0f2938adc78b5226c98f4c3cce25545b2979b1bd6de98c1bb53fdef3";
-const publicAsset = (path) => `${import.meta.env.BASE_URL}${path}`;
+const publicAsset = (path) => `${import.meta.env.BASE_URL}${path.replace(/^assets\/(hero-recruiter-english|lesson-library|brain-empty-rescue)\.png$/, "assets/$1.webp")}`;
 const navItems = [
   { id: "home", label: "Start", icon: House },
   { id: "lessons", label: "Lekcje", icon: BookOpen },
+  { id: "studio", label: "Trening", icon: PhoneCall },
   { id: "cheats", label: "Ściągi", icon: ClipboardText },
   { id: "rescue", label: "Ratunek", icon: Brain },
   { id: "phrases", label: "Moje", icon: Star },
 ];
 const starterProgress = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   completed: [],
   phraseRatings: {},
   phraseSchedule: {},
@@ -38,6 +40,8 @@ const starterProgress = {
   reviewSchedule: {},
   personalScript: {},
   sessionHistory: [],
+  studioHistory: [],
+  workJournal: [],
   practiceDays: [],
   lastLesson: 1,
   startedOn: new Date().toISOString(),
@@ -48,6 +52,7 @@ const starterProgress = {
 const isRecord = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const validRatings = new Set(["again", "hard", "good"]);
 const validScriptSteps = new Set(screeningSteps.map((step) => step.id));
+const validStudioKinds = new Set(["simulation", "reflex", "listening", "brief", "roles", "situation", "natural", "team", "message", "journal"]);
 
 function validLocalDate(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -57,6 +62,21 @@ function validLocalDate(value) {
 
 function safePhrase(value) {
   return typeof value === "string" && Boolean(value.trim()) && value.length <= 500;
+}
+
+function safeRecordedAt(value) {
+  return typeof value === "string" && value.length <= 35 && Number.isFinite(Date.parse(value)) ? value : "";
+}
+
+function mergeActivity(previous, incoming, maximum) {
+  const unique = new Map();
+  for (const entry of [...incoming, ...previous]) {
+    const identity = entry.recordedAt || JSON.stringify(entry);
+    unique.set(identity, entry);
+  }
+  return [...unique.values()]
+    .sort((first, second) => (first.recordedAt || first.date).localeCompare(second.recordedAt || second.date))
+    .slice(-maximum);
 }
 
 export function normalizeProgress(value) {
@@ -88,10 +108,23 @@ export function normalizeProgress(value) {
     .filter((entry) => isRecord(entry) && validLocalDate(entry.date)
       && Number.isInteger(Number(entry.lessonId)) && Number(entry.lessonId) >= 1 && Number(entry.lessonId) <= lessons.length)
     .slice(-120).map((entry) => ({ date: entry.date, lessonId: Number(entry.lessonId), minutes: Math.max(0, Math.min(180, Number(entry.minutes) || 0)) }));
+  const studioHistory = (Array.isArray(source.studioHistory) ? source.studioHistory : [])
+    .filter((entry) => isRecord(entry) && validLocalDate(entry.date) && validStudioKinds.has(entry.kind)
+      && typeof entry.reference === "string" && entry.reference.length <= 100)
+    .slice(-150).map((entry) => ({
+      date: entry.date, kind: entry.kind, reference: entry.reference,
+      responses: Math.max(1, Math.min(100, Number(entry.responses) || 1)),
+      recordedAt: safeRecordedAt(entry.recordedAt),
+    }));
+  const workJournal = (Array.isArray(source.workJournal) ? source.workJournal : [])
+    .filter((entry) => isRecord(entry) && validLocalDate(entry.date) && safePhrase(entry.phrase)
+      && typeof entry.category === "string" && entry.category.length <= 80
+      && typeof entry.reference === "string" && entry.reference.length <= 100)
+    .slice(-100).map((entry) => ({ date: entry.date, category: entry.category, reference: entry.reference, phrase: entry.phrase.trim(), recordedAt: safeRecordedAt(entry.recordedAt) }));
 
   return {
     ...starterProgress,
-    schemaVersion: 2,
+    schemaVersion: 3,
     completed,
     myPhrases,
     phraseRatings,
@@ -101,6 +134,8 @@ export function normalizeProgress(value) {
     practiceDays,
     visitDays,
     sessionHistory,
+    studioHistory,
+    workJournal,
     lastLesson: Number.isInteger(Number(source.lastLesson)) && Number(source.lastLesson) >= 1 && Number(source.lastLesson) <= lessons.length ? Number(source.lastLesson) : 1,
     startedOn: typeof source.startedOn === "string" && source.startedOn.length <= 80 ? source.startedOn : starterProgress.startedOn,
     lastVisit: validLocalDate(source.lastVisit) ? source.lastVisit : "",
@@ -152,7 +187,9 @@ async function copyText(value) {
   textarea.style.opacity = "0";
   document.body.appendChild(textarea);
   textarea.select();
-  const copied = document.execCommand("copy");
+  let copied = false;
+  try { copied = document.execCommand("copy"); }
+  catch { copied = false; }
   textarea.remove();
   if (copied) return true;
 
@@ -203,6 +240,27 @@ function Header({ route, navigate }) {
 
 function ProgressRing({ value }) { return <div className="progress-ring" style={{ "--progress": `${value * 3.6}deg` }} aria-label={`${value}% kursu ukończone`}><span>{value}<small>%</small></span></div>; }
 
+function InstallHint() {
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [installed, setInstalled] = useState(false);
+  useEffect(() => {
+    if (window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone) {
+      setInstalled(true);
+      return undefined;
+    }
+    const prepare = (event) => { event.preventDefault(); setInstallPrompt(event); };
+    const complete = () => { setInstalled(true); setInstallPrompt(null); };
+    window.addEventListener("beforeinstallprompt", prepare);
+    window.addEventListener("appinstalled", complete);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", prepare);
+      window.removeEventListener("appinstalled", complete);
+    };
+  }, []);
+  if (installed) return null;
+  return <section className="install-hint page-width"><div><Sparkle size={23} /><div><strong>Zabierz studio na ekran telefonu.</strong><span>Po pierwszym uruchomieniu lekcje i grafiki są dostępne również offline.</span></div></div>{installPrompt ? <button type="button" className="button button--outline" onClick={async () => { await installPrompt.prompt(); setInstallPrompt(null); }}>Zainstaluj aplikację</button> : <details><summary>Jak dodać do ekranu?</summary><span>Na iPhonie wybierz „Udostępnij”, potem „Dodaj do ekranu początkowego”. W Chrome lub Brave otwórz menu i wybierz instalację aplikacji.</span></details>}</section>;
+}
+
 function Home({ progress, navigate }) {
   const completedCount = progress.completed.length;
   const courseFinished = completedCount >= lessons.length;
@@ -215,8 +273,10 @@ function Home({ progress, navigate }) {
   return <main id="main" className="home-page">
     <section className="home-hero"><div className="hero-copy"><span className="eyebrow">{courseFinished ? "100 lekcji za tobą" : "15–20 minut dziennie"}</span><h1>{courseFinished ? "Teraz rozmowa naprawdę należy do ciebie." : "Mów, zanim stres zabierze ci słowa."}</h1><p>{courseFinished ? "Wracaj do własnych fraz, buduj nowe scenariusze i rozwijaj rozmowę dalej z ChatGPT, kiedy potrzebujesz dodatkowej praktyki." : "Praktyczny angielski do pełnego cyklu rekrutacji IT. Bez szkolnych dialogów, bez korporacyjnego nadęcia, bez przełączania się między oknami."}</p><div className="hero-actions"><button className="button button--violet" onClick={() => navigate("practice")}><Play size={18} weight="fill" /> {courseFinished ? "Kontynuuj codzienną praktykę" : "Zacznij sesję na dziś"}</button><button className="button button--outline" onClick={() => navigate(courseFinished ? "lesson/100" : "rescue")}>{courseFinished ? <ChatCircleDots size={19} /> : <Brain size={19} />} {courseFinished ? "Rozwijaj rozmowę z ChatGPT" : "Potrzebuję zdania teraz"}</button></div>{duePhrases > 0 && <p className="home-review-note"><Star size={16} weight="fill" /> {duePhrases} {duePhrases === 1 ? "twoja fraza czeka" : "twoje frazy czekają"} na krótką powtórkę.</p>}</div><figure className="hero-art"><img src={publicAsset("assets/hero-recruiter-english.png")} alt="Filcowe słuchawki, mikrofon, laptop i karty profili w różowym studiu" /></figure></section>
     <section className="today-section page-width" aria-labelledby="today-title"><header className="section-heading"><div><span className="eyebrow">Twoje dzisiaj</span><h2 id="today-title">{isReview ? "Najpierw krótka powtórka." : courseFinished ? "Teraz ćwiczysz po swojemu." : "Jedna rozmowa bliżej swobody."}</h2></div><div className="streak"><Fire size={18} weight="fill" /><span>{streak ? `${streak} ${streak === 1 ? "dzień" : "dni"} praktyki` : "Twoja pierwsza sesja czeka"}</span></div></header><article className="today-card"><div className="today-number">{String(nextLesson.id).padStart(2, "0")}</div><div className="today-copy"><span className="lesson-kicker">{isReview ? "Powtórka na dziś" : courseFinished ? "Twój własny screening script" : `Moduł ${nextLesson.moduleId} · ${nextLesson.duration} min`}</span><h3>{nextLesson.title}</h3><p>{nextLesson.goal}</p><button className="text-button" onClick={() => navigate(`lesson/${nextLesson.id}`)}>{isReview ? "Powtórz lekcję" : courseFinished ? "Dopracuj własny skrypt" : "Otwórz lekcję"} <ArrowRight size={17} /></button></div><ProgressRing value={completedCount} /></article></section>
-    <section className="quick-paths page-width" aria-label="Szybkie ścieżki"><button className="path-card path-card--rose" onClick={() => navigate("rescue")}><Brain size={28} /><span>Gdy pustka w głowie</span><strong>Odzyskaj rozmowę w 20 sekund</strong><ArrowRight size={19} /></button><button className="path-card path-card--blue" onClick={() => navigate("cheats")}><ClipboardText size={28} /><span>Przed telefonem</span><strong>Otwórz gotową ściągę</strong><ArrowRight size={19} /></button><button className="path-card path-card--cream" onClick={() => navigate("phrases")}><Star size={28} /><span>Twoja baza</span><strong>Powtórz zapisane frazy</strong><ArrowRight size={19} /></button></section>
-    <section className="course-map page-width" aria-labelledby="map-title"><header className="section-heading"><div><span className="eyebrow">100 gotowych lekcji</span><h2 id="map-title">Od pierwszego hello po ofertę.</h2></div><button className="text-button" onClick={() => navigate("lessons")}>Cała biblioteka <ArrowRight size={17} /></button></header><div className="module-strip">{modules.map((module) => { const done = module.lessonIds.filter((id) => progress.completed.includes(id)).length; return <button key={module.id} className={`module-card tone-${module.color}`} onClick={() => navigate(`lessons/module-${module.id}`)}><span>{String(module.id).padStart(2, "0")}</span><h3>{module.title}</h3><p>{done}/10 lekcji</p><div className="mini-progress"><i style={{ width: `${done * 10}%` }} /></div></button>; })}</div></section>
+    <section className="quick-paths page-width" aria-label="Szybkie ścieżki"><button className="path-card path-card--rose" onClick={() => navigate("rescue")}><Brain size={28} /><span>Gdy pustka w głowie</span><strong>Odzyskaj rozmowę w 20 sekund</strong><ArrowRight size={19} /></button><button className="path-card path-card--blue" onClick={() => navigate("studio/prepare")}><ClipboardText size={28} /><span>Przed telefonem</span><strong>Przygotuj rozmowę w 3 minuty</strong><ArrowRight size={19} /></button><button className="path-card path-card--cream" onClick={() => navigate("studio/simulator")}><PhoneCall size={28} /><span>Studio rozmowy</span><strong>Przećwicz trudnego kandydata</strong><ArrowRight size={19} /></button></section>
+    <section className="studio-home-feature page-width"><div><span className="eyebrow">Nowe studio prawdziwej rozmowy</span><h2>Kiedy kandydat nie odpowiada z podręcznika.</h2><p>Rozegraj pełny screening, odpowiedz pod presją i naucz się słyszeć to, co naprawdę powiedział kandydat.</p><button className="button button--violet" onClick={() => navigate("studio")}>Wejdź do studia <ArrowRight size={18} /></button></div><img src={publicAsset("assets/modules/module-10.webp")} alt="Filcowa ilustracja pewnie prowadzonej rozmowy rekrutacyjnej" loading="lazy" /></section>
+    <section className="course-map page-width" aria-labelledby="map-title"><header className="section-heading"><div><span className="eyebrow">100 gotowych lekcji</span><h2 id="map-title">Od pierwszego hello po ofertę.</h2></div><button className="text-button" onClick={() => navigate("lessons")}>Cała biblioteka <ArrowRight size={17} /></button></header><div className="module-strip">{modules.map((module) => { const done = module.lessonIds.filter((id) => progress.completed.includes(id)).length; return <button key={module.id} className={`module-card module-card--illustrated tone-${module.color}`} onClick={() => navigate(`lessons/module-${module.id}`)}><img src={publicAsset(`assets/modules/module-${String(module.id).padStart(2, "0")}.webp`)} alt="" loading="lazy" /><span>{String(module.id).padStart(2, "0")}</span><h3>{module.title}</h3><p>{done}/10 lekcji</p><div className="mini-progress"><i style={{ width: `${done * 10}%` }} /></div></button>; })}</div></section>
+    <InstallHint />
     <section className="method-section"><div className="page-width method-grid"><div><span className="eyebrow">Metoda</span><h2>Najpierw mówisz. Potem odsłaniasz.</h2></div><div className="method-steps"><article><span>01</span><h3>Krótka sytuacja</h3><p>Wiesz, po co używasz zdania i w którym momencie rozmowy.</p></article><article><span>02</span><h3>Głos przed wzorem</h3><p>Próbujesz powiedzieć to po swojemu, zanim zobaczysz gotową frazę.</p></article><article><span>03</span><h3>Powrót w dobrym momencie</h3><p>Again, Hard i Good ustawiają lekkie powtórki w tej przeglądarce.</p></article></div></div></section>
   </main>;
 }
@@ -224,8 +284,11 @@ function Home({ progress, navigate }) {
 function LessonLibrary({ route, progress, navigate }) {
   const routeModule = Number(route.match(/module-(\d+)/)?.[1] || 0);
   const [query, setQuery] = useState(""); const [moduleFilter, setModuleFilter] = useState(routeModule);
+  useEffect(() => { setModuleFilter(routeModule); }, [routeModule]);
   const filtered = lessons.filter((lesson) => { const moduleMatch = !moduleFilter || lesson.moduleId === moduleFilter; const haystack = `${lesson.title} ${lesson.goal} ${lesson.phrases.join(" ")}`.toLowerCase(); return moduleMatch && haystack.includes(query.toLowerCase()); });
-  return <main id="main" className="page page-width library-page"><header className="page-intro page-intro--with-art"><div><span className="eyebrow">Pełna baza</span><h1>100 lekcji. Każda gotowa do użycia.</h1><p>Wybierz etap procesu albo wyszukaj konkretną sytuację. Checkpointy co pięć lekcji łączą materiał w rozmowę.</p></div><img src={publicAsset("assets/lesson-library.png")} alt="Filcowy zestaw słuchawkowy, clipboard i stos kart lekcji" /></header><div className="library-tools"><label className="search-field"><MagnifyingGlass size={19} /><span className="sr-only">Szukaj lekcji</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Szukaj: stawka, feedback, tech stack…" /></label><label className="select-field"><span className="sr-only">Filtruj po module</span><select value={moduleFilter} onChange={(event) => setModuleFilter(Number(event.target.value))}><option value="0">Wszystkie moduły</option>{modules.map((module) => <option key={module.id} value={module.id}>{module.id}. {module.title}</option>)}</select><CaretDown size={16} /></label></div><p className="results-count">{filtered.length} {filtered.length === 1 ? "lekcja" : "lekcji"}</p><div className="lesson-list">{filtered.map((lesson) => { const done = progress.completed.includes(lesson.id); return <button key={lesson.id} className={`lesson-row ${lesson.checkpoint ? "checkpoint" : ""}`} onClick={() => navigate(`lesson/${lesson.id}`)}><span className="lesson-row-number">{String(lesson.id).padStart(2, "0")}</span><span className="lesson-row-copy"><small>Moduł {lesson.moduleId} · {lesson.checkpoint ? "checkpoint · " : ""}{lesson.duration} min</small><strong>{lesson.title}</strong><span>{lesson.goal}</span></span><span className={`lesson-status ${done ? "done" : ""}`}>{done ? <Check size={18} weight="bold" /> : <ArrowRight size={18} />}</span></button>; })}</div></main>;
+  const activeModule = modules.find((module) => module.id === moduleFilter);
+  const illustration = activeModule ? `assets/modules/module-${String(activeModule.id).padStart(2, "0")}.webp` : "assets/lesson-library.png";
+  return <main id="main" className="page page-width library-page"><header className="page-intro page-intro--with-art"><div><span className="eyebrow">{activeModule ? `Moduł ${activeModule.id}` : "Pełna baza"}</span><h1>{activeModule ? activeModule.title : "100 lekcji. Każda gotowa do użycia."}</h1><p>{activeModule ? activeModule.goal : "Wybierz etap procesu albo wyszukaj konkretną sytuację. Checkpointy co pięć lekcji łączą materiał w rozmowę."}</p></div><img src={publicAsset(illustration)} alt={activeModule ? `Filcowa ilustracja modułu: ${activeModule.title}` : "Filcowy zestaw słuchawkowy, clipboard i stos kart lekcji"} /></header><div className="library-tools"><label className="search-field"><MagnifyingGlass size={19} /><span className="sr-only">Szukaj lekcji</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Szukaj: stawka, feedback, tech stack…" /></label><label className="select-field"><span className="sr-only">Filtruj po module</span><select value={moduleFilter} onChange={(event) => setModuleFilter(Number(event.target.value))}><option value="0">Wszystkie moduły</option>{modules.map((module) => <option key={module.id} value={module.id}>{module.id}. {module.title}</option>)}</select><CaretDown size={16} /></label></div><p className="results-count">{filtered.length} {filtered.length === 1 ? "lekcja" : "lekcji"}</p><div className="lesson-list">{filtered.map((lesson) => { const done = progress.completed.includes(lesson.id); return <button key={lesson.id} className={`lesson-row ${lesson.checkpoint ? "checkpoint" : ""}`} onClick={() => navigate(`lesson/${lesson.id}`)}><span className="lesson-row-number">{String(lesson.id).padStart(2, "0")}</span><span className="lesson-row-copy"><small>Moduł {lesson.moduleId} · {lesson.checkpoint ? "checkpoint · " : ""}{lesson.duration} min</small><strong>{lesson.title}</strong><span>{lesson.goal}</span></span><span className={`lesson-status ${done ? "done" : ""}`}>{done ? <Check size={18} weight="bold" /> : <ArrowRight size={18} />}</span></button>; })}</div></main>;
 }
 
 function PhraseCard({ phrase, index, isSaved, onToggle, onSpeak, lessonId, progress, updateProgress }) {
@@ -288,7 +351,7 @@ function LessonPage({ id, progress, updateProgress, navigate }) {
   const editDialogueAnswer = () => { setDialogueDraft(dialogueAnswer); setDialogueAnswer(""); };
   const openAnswerReview = (answer) => { const value = answer.trim(); if (!value) return; setPromptRequest({ initialMode: "check", initialInput: value, reviewDialogue: miniDialogue }); };
   const addCustom = () => { const value = addedPhrase.trim(); if (!value) return; updateProgress((current) => ({ ...current, myPhrases: [...new Set([...current.myPhrases, value])] })); setCustomSaved(true); };
-  return <main id="main" className="lesson-page"><section className={`lesson-hero tone-${lesson.moduleColor}`}><div className="lesson-hero-inner page-width"><button className="back-button" onClick={() => navigate("lessons")}><ArrowLeft size={19} /> Ścieżka nauki</button><div className="lesson-number">{String(lesson.id).padStart(2, "0")}</div><span className="lesson-kicker">Moduł {lesson.moduleId} · {lesson.checkpoint ? "checkpoint · " : ""}{lesson.duration} min</span><h1>{lesson.title}</h1><p>{lesson.goal}.</p><div className="lesson-progress-line"><i style={{ width: `${lesson.id}%` }} /><span>{lesson.id} / 100</span></div></div></section><div className="lesson-content page-width">
+  return <main id="main" className="lesson-page"><section className={`lesson-hero lesson-hero--illustrated tone-${lesson.moduleColor}`}><div className="lesson-hero-inner page-width"><button className="back-button" onClick={() => navigate("lessons")}><ArrowLeft size={19} /> Ścieżka nauki</button><div className="lesson-hero-copy"><div className="lesson-number">{String(lesson.id).padStart(2, "0")}</div><span className="lesson-kicker">Moduł {lesson.moduleId} · {lesson.checkpoint ? "checkpoint · " : ""}{lesson.duration} min</span><h1>{lesson.title}</h1><p>{lesson.goal}.</p><div className="lesson-progress-line"><i style={{ width: `${lesson.id}%` }} /><span>{lesson.id} / 100</span></div></div><img className="lesson-module-art" src={publicAsset(`assets/modules/module-${String(lesson.moduleId).padStart(2, "0")}.webp`)} alt={`Filcowa ilustracja modułu: ${lesson.moduleTitle}`} /></div></section><div className="lesson-content page-width">
     <section className="lesson-block lesson-block--intro"><span className="eyebrow">01 · Sytuacja</span><h2>{practice.introTitle}</h2><p className="large-copy">{practice.introQuestion}</p><div className="speak-cue">{practice.isMessage ? <NotePencil size={24} /> : <Microphone size={24} />}<div><strong>{practice.cueTitle}</strong><span>{practice.cueNote}</span></div></div><Reveal label="Pokaż bezpieczny początek"><p className="model-answer" lang="en">{phrases[0]}</p><button className="inline-audio" onClick={() => speak(phrases[0])}><Headphones size={17} /> Posłuchaj</button></Reveal></section>
     <section className="lesson-block"><span className="eyebrow">02 · Phrase pack</span><h2>{lesson.checkpoint ? "Sześć fraz, które prowadzą rozmowę." : phrases.length === 3 ? "Trzy zdania, które wykonują pracę." : `${phrases.length} zdań, które wykonują pracę.`}</h2><p>{lesson.checkpoint ? "Potraktuj je jak mapę rozmowy. Każdą frazę możesz ocenić i powtarzać osobno." : "Wybierz frazę, która najlepiej pasuje do momentu rozmowy. Oceniasz każde zdanie osobno."}</p><div className="phrase-grid">{phrases.slice(0, 6).map((phrase, index) => <PhraseCard key={phrase} phrase={phrase} index={index} isSaved={saved(phrase)} onToggle={togglePhrase} onSpeak={speak} lessonId={lesson.id} progress={progress} updateProgress={updateProgress} />)}</div></section>
     <section className="lesson-block lesson-block--paper"><span className="eyebrow">03 · Rozpoznaj moment</span><h2>Co powiesz w tej chwili?</h2><blockquote><span>Intencja</span>Chcesz {quizIntention}. Wszystkie warianty pasują do tej rozmowy. Wybierz ten, który najdokładniej realizuje właśnie tę intencję.</blockquote><div className="choice-list">{choiceOptions.map((option) => { const isCorrect = acceptedQuizAnswers.includes(option); return <button key={option} aria-pressed={selectedChoice === option} className={selectedChoice === option ? (isCorrect ? "correct" : "incorrect") : ""} onClick={() => setSelectedChoice(option)}><span lang="en">{option}</span>{selectedChoice === option && (isCorrect ? <CheckCircle size={20} weight="fill" /> : <X size={19} />)}</button>; })}</div>{selectedChoice && <p className="choice-feedback" role="status">{acceptedQuizAnswers.includes(selectedChoice) ? selectedChoice === quizAnswer ? "Tak. To zdanie najdokładniej realizuje tę konkretną intencję." : "Tak. Ten wariant również naturalnie realizuje tę samą intencję." : `Ta fraza też pasuje do tej rozmowy, ale wykonuje inny ruch. Teraz chcesz ${quizIntention}.`}</p>}</section>
@@ -421,6 +484,8 @@ function MyPhrases({ progress, updateProgress, navigate }) {
           personalScript: { ...imported.personalScript, ...current.personalScript },
           practiceDays: [...new Set([...current.practiceDays, ...imported.practiceDays])].sort(),
           sessionHistory: [...current.sessionHistory, ...imported.sessionHistory].slice(-120),
+          studioHistory: mergeActivity(current.studioHistory, imported.studioHistory, 150),
+          workJournal: mergeActivity(current.workJournal, imported.workJournal, 100),
         });
       });
       setNotice("Połączono zapisane frazy i postęp z wybraną kopią.");
@@ -437,14 +502,16 @@ function Footer() { return <footer className="app-footer"><div className="page-w
 
 export function App() {
   const [unlocked, setUnlocked] = useState(() => { try { return sessionStorage.getItem("nearshore-english-unlocked") === "yes"; } catch { return false; } }); const [route, navigate] = useRoute(); const [progress, updateProgress, storageWarning] = useStoredProgress();
+  const [dailyPrompt, setDailyPrompt] = useState(null);
   if (!unlocked) return <PasswordGate onUnlock={() => setUnlocked(true)} />;
   const lessonId = route.match(/^lesson\/(\d+)/)?.[1]; let page;
   if (lessonId) page = <LessonPage id={lessonId} progress={progress} updateProgress={updateProgress} navigate={navigate} />;
-  else if (route === "practice") page = <DailyPractice progress={progress} updateProgress={updateProgress} navigate={navigate} />;
+  else if (route === "practice") page = <DailyPractice progress={progress} updateProgress={updateProgress} navigate={navigate} onReviewAnswer={(lesson, answer) => setDailyPrompt({ lesson, initialMode: "check", initialInput: answer, reviewDialogue: getLessonDialogue(lesson) })} />;
+  else if (route.startsWith("studio")) page = <FieldworkStudio route={route} progress={progress} updateProgress={updateProgress} navigate={navigate} />;
   else if (route.startsWith("lessons")) page = <LessonLibrary route={route} progress={progress} navigate={navigate} />;
   else if (route.startsWith("cheats")) page = <CheatSheets route={route} progress={progress} updateProgress={updateProgress} navigate={navigate} />;
   else if (route === "rescue") page = <Rescue progress={progress} updateProgress={updateProgress} navigate={navigate} />;
   else if (route === "phrases") page = <MyPhrases progress={progress} updateProgress={updateProgress} navigate={navigate} />;
   else page = <Home progress={progress} navigate={navigate} />;
-  return <div className="app-shell"><a className="skip-link" href="#main">Przejdź do treści</a><Header route={route} navigate={navigate} />{storageWarning && <div className="storage-warning" role="alert"><ShieldCheck size={18} /> {storageWarning}</div>}{page}<Footer /></div>;
+  return <div className="app-shell"><a className="skip-link" href="#main" onClick={(event) => { event.preventDefault(); const target = document.getElementById("main"); if (!target) return; target.setAttribute("tabindex", "-1"); target.focus({ preventScroll: true }); target.scrollIntoView({ block: "start" }); }}>Przejdź do treści</a><Header route={route} navigate={navigate} />{storageWarning && <div className="storage-warning" role="alert"><ShieldCheck size={18} /> {storageWarning}</div>}{page}<Footer />{dailyPrompt && <PromptModal lesson={dailyPrompt.lesson} progress={progress} onClose={() => setDailyPrompt(null)} initialMode={dailyPrompt.initialMode} initialInput={dailyPrompt.initialInput} reviewDialogue={dailyPrompt.reviewDialogue} />}</div>;
 }

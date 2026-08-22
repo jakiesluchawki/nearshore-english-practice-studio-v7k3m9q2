@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test:sites": "node --test tests/sites-worker.test.mjs",
     "test:content": "node scripts/check-content.mjs",
-    "test:routes": "node scripts/check-routes.mjs"
+    "test:routes": "node scripts/check-routes.mjs",
+    "test:fieldwork": "node scripts/check-fieldwork.mjs",
+    "test:pwa": "node --test tests/service-worker.test.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

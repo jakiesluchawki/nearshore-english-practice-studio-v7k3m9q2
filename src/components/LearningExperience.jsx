@@ -18,12 +18,18 @@ const reviewOptions = [
   ["good", "Mam to", "za 7 dni"],
 ];
 
-export function speakPhrase(phrase) {
+export function speakPhrase(phrase, rate = 0.88, onEnd) {
   if (!("speechSynthesis" in window)) return false;
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(phrase);
   utterance.lang = "en-GB";
-  utterance.rate = 0.88;
+  utterance.rate = Math.max(0.5, Math.min(1.15, Number(rate) || 0.88));
+  if (typeof onEnd === "function") {
+    let completed = false;
+    const finish = () => { if (completed) return; completed = true; onEnd(); };
+    utterance.addEventListener("end", finish, { once: true });
+    utterance.addEventListener("error", finish, { once: true });
+  }
   window.speechSynthesis.speak(utterance);
   return true;
 }
@@ -51,16 +57,16 @@ function displayTime(seconds) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-export function PracticeTimer({ seconds, lessonKey = "practice", title = "Twój czas", compact = false }) {
+export function PracticeTimer({ seconds, lessonKey = "practice", title = "Twój czas", compact = false, autoStart = false }) {
   const [remaining, setRemaining] = useState(seconds);
-  const [running, setRunning] = useState(false);
+  const [running, setRunning] = useState(autoStart);
   const deadlineRef = useRef(0);
 
   useEffect(() => {
     setRemaining(seconds);
-    setRunning(false);
+    setRunning(autoStart);
     deadlineRef.current = 0;
-  }, [seconds, lessonKey]);
+  }, [seconds, lessonKey, autoStart]);
 
   useEffect(() => {
     if (!running) return undefined;
@@ -228,7 +234,7 @@ const sessionStages = [
   { id: "recap", title: "Zabierz jedno zdanie do pracy", minutes: 2, label: "Podsumowanie" },
 ];
 
-export function DailyPractice({ progress, updateProgress, navigate }) {
+export function DailyPractice({ progress, updateProgress, navigate, onReviewAnswer }) {
   const [sessionLessonId] = useState(() => progress.completed.length >= lessons.length
     ? [91, 95, 98, 99, 100][new Date().getDate() % 5]
     : getNextLessonId(progress, lessons));
@@ -267,8 +273,8 @@ export function DailyPractice({ progress, updateProgress, navigate }) {
   return <main id="main" className="page page-width daily-practice-page"><header className="daily-intro"><div><span className="eyebrow">Twoje 17 minut</span><h1>Mała sesja. Dużo mniej pustki.</h1><p>Nowy język miesza się z frazami, które sama zapisałaś. Najpierw mówisz, dopiero potem porównujesz.</p></div><PracticeTimer seconds={17 * 60} lessonKey={`session-${lesson.id}`} title="Czas całej sesji" compact /></header><ol className="session-progress" aria-label="Plan codziennej sesji">{sessionStages.map((item, index) => <li key={item.id} className={index === stage ? "current" : index < stage ? "done" : ""}><button type="button" disabled={index > furthestStage} onClick={() => setStage(index)} aria-current={index === stage ? "step" : undefined}><span>{index < stage ? <Check size={16} weight="bold" /> : String(index + 1).padStart(2, "0")}</span><strong>{item.label}</strong><small>{item.minutes} min</small></button></li>)}</ol><section className="session-stage"><header><span className="eyebrow">{String(stage + 1).padStart(2, "0")} · {currentStage.minutes} min</span><h2>{currentStage.title}</h2></header>
     {stage === 0 && <><p>{queue.length ? "Każde zdanie oceniasz osobno. Ulubione i trudne wracają jako pierwsze." : "Nie masz jeszcze zaległych zdań. Zacznij od jednej frazy z dzisiejszej lekcji."}</p><div className="session-review-list">{(queue.length ? queue : [{ phrase: quiz.answer, lessonId: lesson.id, favorite: progress.myPhrases.includes(quiz.answer) }]).map((item) => <article key={item.phrase}><div><p lang="en">{item.phrase}</p><span>{item.favorite ? <><Star size={15} weight="fill" /> Twoja fraza</> : "Z dzisiejszej lekcji"}</span></div><button type="button" className="session-listen" onClick={() => speakPhrase(item.phrase)} aria-label={`Posłuchaj: ${item.phrase}`}><Headphones size={19} /></button><PhraseReviewControls phrase={item.phrase} lessonId={item.lessonId || lesson.id} progress={progress} updateProgress={updateProgress} compact /></article>)}</div></>}
     {stage === 1 && <><p className="session-context">Wyobraź sobie, że chcesz {lesson.goal}. Zacznij od zdania, które przyszłoby ci do głowy podczas prawdziwej rozmowy.</p><PracticeTimer seconds={lesson.practiceType === "message" ? 45 : 20} lessonKey={`intro-${lesson.id}`} title={lesson.practiceType === "message" ? "Czas na krótką wiadomość" : "Czas na odpowiedź na głos"} /><div className="session-phrase-pack">{lesson.phrases.slice(0, 3).map((phrase) => <button type="button" key={phrase} lang="en" onClick={() => speakPhrase(phrase)}><Headphones size={16} /> {phrase}</button>)}</div></>}
-    {stage === 2 && <><div className="translation-exercise"><span className="eyebrow">Twoja intencja po polsku</span><p>Chcesz {quiz.intention}. Jak powiesz to po angielsku?</p><textarea value={translation} onChange={(event) => setTranslation(event.target.value)} aria-label="Twoja odpowiedź po angielsku" placeholder="Najpierw powiedz, potem zapisz swoją wersję…" /><VoicePractice onTranscript={setTranslation} lessonKey={`translation-${lesson.id}`} /><button type="button" className="button button--outline" onClick={() => setTranslationVisible(true)} disabled={!translation.trim()}>Porównaj ze wzorem</button>{translationVisible && <div className="translation-model"><span>Naturalny wariant</span><p lang="en">{quiz.answer}</p><small>Twoja odpowiedź nie musi brzmieć identycznie. Liczy się ta sama intencja i spokojny ton.</small></div>}</div><ClozeExercise lesson={lesson} answer={quiz.answer} /></>}
-    {stage === 3 && <><div className="session-dialogue"><div className="session-candidate"><span>{candidateLead ? "Candidate" : "Sytuacja"}</span>{candidateLead ? <p lang="en">{candidateLead}</p> : <p>Twoim celem jest {lesson.goal}. Zacznij rozmowę własnym zdaniem.</p>}</div><label><span>Twoja odpowiedź</span><textarea value={dialogueAnswer} onChange={(event) => setDialogueAnswer(event.target.value)} placeholder={candidateLead ? "Jak odpowiesz kandydatowi?" : "Jak zaczniesz tę część rozmowy?"} /></label><VoicePractice onTranscript={setDialogueAnswer} lessonKey={`dialogue-${lesson.id}`} /><button type="button" className="button button--violet" disabled={!dialogueAnswer.trim()} onClick={() => { setDialogueVisible(true); updateProgress((current) => withPracticeDay(current)); }}>Sprawdź naturalny wariant</button>{dialogueVisible && <><div className="translation-model"><span>Jedna z możliwych odpowiedzi</span><p lang="en">{recruiterModel}</p><small>W pełnej lekcji możesz poprosić ChatGPT o ocenę własnej odpowiedzi.</small></div>{candidateFollowUp && <div className="session-candidate session-candidate--follow"><span>Candidate odpowiada</span><p lang="en">{candidateFollowUp}</p></div>}</>}</div></>}
+    {stage === 2 && <><div className="translation-exercise"><span className="eyebrow">Twoja intencja po polsku</span><p>Chcesz {quiz.intention}. Jak powiesz to po angielsku?</p><textarea value={translation} onChange={(event) => setTranslation(event.target.value)} aria-label="Twoja odpowiedź po angielsku" placeholder="Najpierw powiedz, potem zapisz swoją wersję…" /><VoicePractice onTranscript={setTranslation} lessonKey={`translation-${lesson.id}`} /><button type="button" className="button button--outline" onClick={() => setTranslationVisible(true)} disabled={!translation.trim()}>Porównaj ze wzorem</button>{translationVisible && <><div className="translation-model"><span>Naturalny wariant</span><p lang="en">{quiz.answer}</p><small>Twoja odpowiedź nie musi brzmieć identycznie. Liczy się ta sama intencja i spokojny ton.</small></div>{onReviewAnswer && <button type="button" className="session-chatgpt" onClick={() => onReviewAnswer(lesson, translation)}><Sparkle size={17} /> Niech ChatGPT oceni twoją odpowiedź</button>}</>}</div><ClozeExercise lesson={lesson} answer={quiz.answer} /></>}
+    {stage === 3 && <><div className="session-dialogue"><div className="session-candidate"><span>{candidateLead ? "Candidate" : "Sytuacja"}</span>{candidateLead ? <p lang="en">{candidateLead}</p> : <p>Twoim celem jest {lesson.goal}. Zacznij rozmowę własnym zdaniem.</p>}</div><label><span>Twoja odpowiedź</span><textarea value={dialogueAnswer} onChange={(event) => setDialogueAnswer(event.target.value)} placeholder={candidateLead ? "Jak odpowiesz kandydatowi?" : "Jak zaczniesz tę część rozmowy?"} /></label><VoicePractice onTranscript={setDialogueAnswer} lessonKey={`dialogue-${lesson.id}`} /><button type="button" className="button button--violet" disabled={!dialogueAnswer.trim()} onClick={() => { setDialogueVisible(true); updateProgress((current) => withPracticeDay(current)); }}>Sprawdź naturalny wariant</button>{dialogueVisible && <><div className="translation-model"><span>Jedna z możliwych odpowiedzi</span><p lang="en">{recruiterModel}</p><small>Oceń intencję i naturalność, nie każde pojedyncze słowo.</small></div>{onReviewAnswer && <button type="button" className="session-chatgpt" onClick={() => onReviewAnswer(lesson, dialogueAnswer)}><Sparkle size={17} /> Niech ChatGPT oceni twoją odpowiedź</button>}{candidateFollowUp && <div className="session-candidate session-candidate--follow"><span>Candidate odpowiada</span><p lang="en">{candidateFollowUp}</p></div>}</>}</div></>}
     {stage === 4 && <><div className="session-recap"><Sparkle size={27} weight="fill" /><div><strong>Dzisiejsza fraza do zabrania</strong><p lang="en">{quiz.answer}</p></div></div><PhraseReviewControls phrase={quiz.answer} lessonId={lesson.id} progress={progress} updateProgress={updateProgress} />{finished ? <div className="session-finished" role="status"><CheckCircle size={23} weight="fill" /><div><strong>Sesja zapisana.</strong><span>Wróć jutro albo przejdź do pełnej lekcji.</span></div></div> : <button type="button" className="button button--violet" onClick={completeSession}>Zakończ i zapisz dzisiejszą sesję <Check size={18} /></button>}</>}
     <footer className="session-navigation"><button type="button" className="text-button" onClick={() => navigate(`lesson/${lesson.id}`)}>Pełna lekcja {lesson.id}</button>{stage < sessionStages.length - 1 && <button type="button" className="button button--violet" disabled={!canAdvance} onClick={advance}>Dalej: {sessionStages[stage + 1].label} <ArrowRight size={17} /></button>}</footer>
   </section></main>;

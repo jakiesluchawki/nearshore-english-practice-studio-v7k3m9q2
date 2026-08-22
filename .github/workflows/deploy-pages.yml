@@ -32,6 +32,10 @@ jobs:
         run: npm ci
       - name: Verify lesson content
         run: npm run test:content
+      - name: Verify realistic conversation studio
+        run: npm run test:fieldwork
+      - name: Verify offline application
+        run: npm run test:pwa
       - name: Verify all learning routes
         run: npm run test:routes
       - name: Build GitHub Pages bundle

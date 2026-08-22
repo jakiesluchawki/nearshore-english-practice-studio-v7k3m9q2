@@ -13,6 +13,12 @@ Praktyczna aplikacja do codziennego angielskiego dla IT recruiterki pracującej 
 - odsłuch wymowy, opcjonalne lokalne nagrywanie i rozpoznawanie mowy w obsługiwanych przeglądarkach;
 - generator promptów z kontekstem lekcji i własnych fraz, bez klucza API i automatycznego wysyłania danych;
 - lokalny eksport i import postępu między przeglądarkami.
+- rozgałęzione symulacje rozmów z ośmioma kandydatami, w formatach 5, 15 i 30 minut;
+- trening refleksu, odsłuch kandydata przed pokazaniem tekstu i pełny transcript do oceny w ChatGPT;
+- anonimowy generator rozmowy przed telefonem, osiem pakietów specjalizacji IT i 16 trudnych sytuacji;
+- ćwiczenia komunikacji z klientem, wiadomości rekrutacyjne, 18 częstych kalek oraz prywatny dziennik trudnych momentów;
+- dziesięć autorskich filcowych ilustracji, widocznych we wszystkich modułach oraz we wszystkich stu lekcjach;
+- instalację na ekranie telefonu i dostęp offline po pierwszym załadowaniu.
 
 ## Prywatność
 
